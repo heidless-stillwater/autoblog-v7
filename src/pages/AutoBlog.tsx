@@ -13,25 +13,29 @@ const AutoBlog = () => {
 
     const sortedArticles = [...articles].sort((a, b) => b.createdAt - a.createdAt);
 
-    const handlePublish = (article: Article) => {
+    const handlePublish = async (article: Article) => {
         // Convert Article to Post and publish
         const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
         if (!currentVersion) return;
 
-        addPost({
-            id: article.id, // Reuse ID? or generate new one? Let's reuse for tracking
-            title: `[Autoblog] ${article.topic}`, // Or parse title from markdown?
-            content: currentVersion.content,
-            status: 'draft', // User needs to approve first? Prompt said "state of draft so it can be approved"
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            tags: ['autoblog'],
-            // user needs to add hero image manually or we could try to generate one in future
-            attachments: [],
-        });
+        try {
+            await addPost({
+                title: `[Autoblog] ${article.topic}`, // Or parse title from markdown?
+                content: currentVersion.content,
+                status: 'draft', // User needs to approve first? Prompt said "state of draft so it can be approved"
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                tags: ['autoblog'],
+                // user needs to add hero image manually or we could try to generate one in future
+                attachments: [],
+            });
 
-        alert('Article draft created in Posts! You can now edit and publish it.');
-        navigate(`/posts/${article.id}`);
+            alert('Article draft created in Posts! You can now edit and publish it.');
+            navigate('/posts');
+        } catch (error) {
+            console.error('Error publishing article:', error);
+            alert('Failed to publish article. Please try again.');
+        }
     };
 
     return (

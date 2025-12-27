@@ -5,19 +5,31 @@ import {
     FileText,
     Image as ImageIcon,
     Settings as SettingsIcon,
-    PlusCircle
+    PlusCircle,
+    LogOut,
+    User
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store';
+import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = () => {
     const { settings } = useStore();
+    const { user, signOut } = useAuth();
 
     const navItems = [
         { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
         { to: '/posts', icon: FileText, label: 'Posts' },
         { to: '/media', icon: ImageIcon, label: 'Media' },
     ];
+
+    const handleSignOut = async () => {
+        try {
+            await signOut();
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
+    };
 
     return (
         <aside className="w-64 h-screen fixed left-0 top-0 bg-slate-900 border-r border-slate-800 flex flex-col z-50">
@@ -27,6 +39,31 @@ const Sidebar = () => {
                 </h1>
                 <p className="text-sm text-slate-400 truncate mt-1">{settings.tagline}</p>
             </div>
+
+            {/* User Profile Section */}
+            {user && (
+                <div className="px-4 pb-4">
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                                {user.photoURL ? (
+                                    <img src={user.photoURL} alt="Profile" className="w-full h-full rounded-full" />
+                                ) : (
+                                    <User size={20} className="text-white" />
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-200 truncate">
+                                    {user.displayName || 'User'}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">
+                                    {user.email}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <nav className="flex-1 px-4 space-y-2">
                 {navItems.map((item) => (
@@ -61,13 +98,20 @@ const Sidebar = () => {
                 </div>
             </nav>
 
-            <div className="p-4 border-t border-slate-800">
+            <div className="p-4 border-t border-slate-800 space-y-2">
                 <button
                     onClick={() => document.dispatchEvent(new CustomEvent('open-settings'))}
                     className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
                 >
                     <SettingsIcon size={20} />
                     <span className="font-medium">Settings</span>
+                </button>
+                <button
+                    onClick={handleSignOut}
+                    className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-all"
+                >
+                    <LogOut size={20} />
+                    <span className="font-medium">Sign Out</span>
                 </button>
             </div>
         </aside>

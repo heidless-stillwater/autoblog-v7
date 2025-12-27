@@ -1,48 +1,111 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useStore } from '../store';
 import type { MediaItem } from '../types';
-import { nanoid } from 'nanoid';
 import { format } from 'date-fns';
 import {
     Upload,
     Trash2,
     Search,
     Copy,
-    Check
+    Check,
+    Download,
+    RefreshCw
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const Media = () => {
-    const { media, addMedia, deleteMedia } = useStore();
+    const { media, addMedia, deleteMedia, posts } = useStore();
     const [search, setSearch] = useState('');
     const [dragActive, setDragActive] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [syncing, setSyncing] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const filteredMedia = media
         .filter(item => item.name.toLowerCase().includes(search.toLowerCase()))
         .sort((a, b) => b.createdAt - a.createdAt);
 
-    const handleUpload = (files: FileList | null) => {
+    // Sync media from posts on mount
+    useEffect(() => {
+        syncMediaFromPosts();
+    }, []);
+
+    const syncMediaFromPosts = async () => {
+        setSyncing(true);
+        const existingUrls = new Set(media.map(m => m.url));
+        const newMediaItems: Omit<MediaItem, 'id'>[] = [];
+
+        posts.forEach(post => {
+            // Extract hero image
+            if (post.heroImage && !existingUrls.has(post.heroImage)) {
+                newMediaItems.push({
+                    name: `${post.title.substring(0, 30)}-hero.jpg`,
+                    type: 'image/jpeg',
+                    url: post.heroImage,
+                    createdAt: post.createdAt,
+                    size: 0 // Size unknown for existing images
+                });
+                existingUrls.add(post.heroImage);
+            }
+
+            // Extract images from markdown content
+            const imageRegex = /!\[.*?\]\((.*?)\)/g;
+            let match;
+            while ((match = imageRegex.exec(post.content)) !== null) {
+                const imageUrl = match[1];
+                if (!existingUrls.has(imageUrl)) {
+                    newMediaItems.push({
+                        name: `${post.title.substring(0, 30)}-content.jpg`,
+                        type: 'image/jpeg',
+                        url: imageUrl,
+                        createdAt: post.createdAt,
+                        size: 0
+                    });
+                    existingUrls.add(imageUrl);
+                }
+            }
+
+            // Extract attachments
+            post.attachments.forEach(attachment => {
+                if (!existingUrls.has(attachment)) {
+                    newMediaItems.push({
+                        name: `${post.title.substring(0, 30)}-attachment`,
+                        type: 'application/octet-stream',
+                        url: attachment,
+                        createdAt: post.createdAt,
+                        size: 0
+                    });
+                    existingUrls.add(attachment);
+                }
+            });
+        });
+
+        // Add all new media items
+        for (const item of newMediaItems) {
+            await addMedia(item);
+        }
+
+        setSyncing(false);
+    };
+
+    const handleUpload = async (files: FileList | null) => {
         if (!files) return;
 
-        Array.from(files).forEach(file => {
-            if (!file.type.startsWith('image/')) return;
+        for (const file of Array.from(files)) {
+            if (!file.type.startsWith('image/')) continue;
 
             const reader = new FileReader();
-            reader.onload = (e) => {
-                const newItem: MediaItem = {
-                    id: nanoid(),
+            reader.onload = async (e) => {
+                await addMedia({
                     name: file.name,
                     type: file.type,
                     url: e.target?.result as string,
                     createdAt: Date.now(),
                     size: file.size
-                };
-                addMedia(newItem);
+                });
             };
             reader.readAsDataURL(file);
-        });
+        }
     };
 
     const handleDrag = (e: React.DragEvent) => {
@@ -70,17 +133,63 @@ const Media = () => {
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const handleDelete = (id: string, e: React.MouseEvent) => {
-        // Prevent clicking the card behind it if any logic exists
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (confirm('Delete this image?')) {
-            deleteMedia(id);
+            await deleteMedia(id);
         }
+    };
+
+    const handleDownload = (item: MediaItem, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.download = item.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleDownloadAll = () => {
+        if (filteredMedia.length === 0) return;
+
+        filteredMedia.forEach((item, index) => {
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.href = item.url;
+                link.download = item.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }, index * 100); // Stagger downloads to avoid browser blocking
+        });
     };
 
     return (
         <div className="space-y-6 pb-20">
-            <h1 className="text-3xl font-bold text-white">Media Library</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold text-white">Media Library</h1>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={syncMediaFromPosts}
+                        disabled={syncing}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+                        title="Sync media from posts"
+                    >
+                        <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                        <span className="hidden sm:inline">Sync from Posts</span>
+                    </button>
+                    <button
+                        onClick={handleDownloadAll}
+                        disabled={filteredMedia.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                        title="Download all media"
+                    >
+                        <Download size={18} />
+                        <span className="hidden sm:inline">Download All</span>
+                    </button>
+                </div>
+            </div>
 
             {/* Upload Area */}
             <div
@@ -151,10 +260,20 @@ const Media = () => {
 
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
                             <p className="text-xs text-white truncate mb-1">{item.name}</p>
-                            <p className="text-[10px] text-slate-400">{(item.size / 1024).toFixed(1)} KB • {format(item.createdAt, 'MMM d')}</p>
+                            <p className="text-[10px] text-slate-400">
+                                {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB • ` : ''}
+                                {format(item.createdAt, 'MMM d')}
+                            </p>
                         </div>
 
                         <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                                onClick={(e) => handleDownload(item, e)}
+                                className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
+                                title="Download"
+                            >
+                                <Download size={14} />
+                            </button>
                             <button
                                 onClick={() => copyToClipboard(item.url, item.id)}
                                 className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"

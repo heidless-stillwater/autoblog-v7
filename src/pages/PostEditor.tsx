@@ -70,12 +70,23 @@ const PostEditor = () => {
         setIsSaving(false);
     };
 
-    const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setHeroImage(reader.result as string);
+            reader.onloadend = async () => {
+                const imageUrl = reader.result as string;
+                setHeroImage(imageUrl);
+
+                // Also add to media library
+                const { addMedia } = useStore.getState();
+                await addMedia({
+                    name: file.name,
+                    type: file.type,
+                    url: imageUrl,
+                    createdAt: Date.now(),
+                    size: file.size
+                });
             };
             reader.readAsDataURL(file);
         }

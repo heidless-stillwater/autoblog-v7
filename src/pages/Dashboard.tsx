@@ -6,13 +6,12 @@ import { format } from 'date-fns';
 const Dashboard = () => {
     const { posts, settings } = useStore();
 
-    // Filter live posts and sort by date descending
-    const livePosts = posts
-        .filter(p => p.status === 'live')
+    // Show all posts sorted by date descending (both live and draft)
+    const allPosts = posts
         .sort((a, b) => b.createdAt - a.createdAt);
 
-    const latestPost = livePosts[0];
-    const recentPosts = livePosts.slice(1, 4);
+    const latestPost = allPosts[0];
+    const recentPosts = allPosts.slice(1, 6); // Show 5 recent posts (excluding the latest)
 
     return (
         <div className="space-y-12">
@@ -38,7 +37,13 @@ const Dashboard = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent flex flex-col justify-end p-8">
                         <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
                             <div className="flex items-center gap-2 text-indigo-400 mb-2 font-medium">
-                                <span className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30 text-xs">Latest Release</span>
+                                <span className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30 text-xs">Latest Post</span>
+                                <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold ${latestPost.status === 'live'
+                                    ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                                    : 'bg-amber-500/20 border border-amber-500/30 text-amber-400'
+                                    }`}>
+                                    {latestPost.status}
+                                </span>
                                 <span className="text-slate-400 text-sm flex items-center gap-1">
                                     <Clock size={14} />
                                     {format(latestPost.createdAt, 'MMM d, yyyy')}
@@ -92,9 +97,17 @@ const Dashboard = () => {
                                 </div>
                                 <div className="p-5">
                                     <div className="flex justify-between items-start mb-2">
-                                        <span className="text-xs text-indigo-400 font-medium px-2 py-0.5 rounded bg-indigo-500/10">
-                                            {post.tags?.[0] || 'Updates'}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-indigo-400 font-medium px-2 py-0.5 rounded bg-indigo-500/10">
+                                                {post.tags?.[0] || 'Updates'}
+                                            </span>
+                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${post.status === 'live'
+                                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                                    : 'bg-amber-500/10 text-amber-400'
+                                                }`}>
+                                                {post.status}
+                                            </span>
+                                        </div>
                                         <span className="text-xs text-slate-500">{format(post.createdAt, 'MMM d')}</span>
                                     </div>
                                     <h4 className="text-lg font-bold text-slate-200 group-hover:text-indigo-400 transition-colors line-clamp-1 mb-2">

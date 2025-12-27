@@ -202,6 +202,17 @@ const PostList = () => {
                                     )}
                                 </button>
 
+                                {/* Hero Image Thumbnail */}
+                                {post.heroImage && (
+                                    <div className="flex-shrink-0">
+                                        <img
+                                            src={post.heroImage}
+                                            alt={post.title}
+                                            className="w-16 h-16 object-cover rounded-lg border border-slate-700"
+                                        />
+                                    </div>
+                                )}
+
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-1">
                                         <div className={clsx(

@@ -1,0 +1,167 @@
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    query,
+    orderBy,
+    Timestamp,
+    setDoc
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
+import type { Post, MediaItem, Settings, Article } from '../types';
+
+// Helper to convert Firestore timestamp to number
+const timestampToNumber = (timestamp: any): number => {
+    if (timestamp?.toMillis) {
+        return timestamp.toMillis();
+    }
+    return timestamp || Date.now();
+};
+
+// Posts Service
+export const postsService = {
+    async getAll(userId: string): Promise<Post[]> {
+        const postsRef = collection(db, 'users', userId, 'posts');
+        const q = query(postsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt)
+        } as Post));
+    },
+
+    async getById(userId: string, postId: string): Promise<Post | null> {
+        const postRef = doc(db, 'users', userId, 'posts', postId);
+        const snapshot = await getDoc(postRef);
+        if (!snapshot.exists()) return null;
+        return {
+            ...snapshot.data(),
+            id: snapshot.id,
+            createdAt: timestampToNumber(snapshot.data().createdAt),
+            updatedAt: timestampToNumber(snapshot.data().updatedAt)
+        } as Post;
+    },
+
+    async create(userId: string, post: Omit<Post, 'id'>): Promise<string> {
+        const postsRef = collection(db, 'users', userId, 'posts');
+        const docRef = await addDoc(postsRef, {
+            ...post,
+            createdAt: Timestamp.fromMillis(post.createdAt),
+            updatedAt: Timestamp.fromMillis(post.updatedAt)
+        });
+        return docRef.id;
+    },
+
+    async update(userId: string, postId: string, updates: Partial<Post>): Promise<void> {
+        const postRef = doc(db, 'users', userId, 'posts', postId);
+        const updateData: any = { ...updates };
+        if (updateData.createdAt) {
+            updateData.createdAt = Timestamp.fromMillis(updateData.createdAt);
+        }
+        if (updateData.updatedAt) {
+            updateData.updatedAt = Timestamp.fromMillis(updateData.updatedAt);
+        }
+        await updateDoc(postRef, updateData);
+    },
+
+    async delete(userId: string, postId: string): Promise<void> {
+        const postRef = doc(db, 'users', userId, 'posts', postId);
+        await deleteDoc(postRef);
+    }
+};
+
+// Media Service
+export const mediaService = {
+    async getAll(userId: string): Promise<MediaItem[]> {
+        const mediaRef = collection(db, 'users', userId, 'media');
+        const q = query(mediaRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt)
+        } as MediaItem));
+    },
+
+    async create(userId: string, item: Omit<MediaItem, 'id'>): Promise<string> {
+        const mediaRef = collection(db, 'users', userId, 'media');
+        const docRef = await addDoc(mediaRef, {
+            ...item,
+            createdAt: Timestamp.fromMillis(item.createdAt)
+        });
+        return docRef.id;
+    },
+
+    async delete(userId: string, itemId: string): Promise<void> {
+        const itemRef = doc(db, 'users', userId, 'media', itemId);
+        await deleteDoc(itemRef);
+    }
+};
+
+// Settings Service
+export const settingsService = {
+    async get(userId: string): Promise<Settings | null> {
+        const settingsRef = doc(db, 'users', userId, 'settings', 'userSettings');
+        const snapshot = await getDoc(settingsRef);
+        if (!snapshot.exists()) return null;
+        return snapshot.data() as Settings;
+    },
+
+    async update(userId: string, settings: Settings): Promise<void> {
+        const settingsRef = doc(db, 'users', userId, 'settings', 'userSettings');
+        await setDoc(settingsRef, settings, { merge: true });
+    }
+};
+
+// Articles Service
+export const articlesService = {
+    async getAll(userId: string): Promise<Article[]> {
+        const articlesRef = collection(db, 'users', userId, 'articles');
+        const q = query(articlesRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt),
+            scheduleDate: doc.data().scheduleDate ? timestampToNumber(doc.data().scheduleDate) : undefined
+        } as Article));
+    },
+
+    async create(userId: string, article: Omit<Article, 'id'>): Promise<string> {
+        const articlesRef = collection(db, 'users', userId, 'articles');
+        const docRef = await addDoc(articlesRef, {
+            ...article,
+            createdAt: Timestamp.fromMillis(article.createdAt),
+            updatedAt: Timestamp.fromMillis(article.updatedAt),
+            scheduleDate: article.scheduleDate ? Timestamp.fromMillis(article.scheduleDate) : null
+        });
+        return docRef.id;
+    },
+
+    async update(userId: string, articleId: string, updates: Partial<Article>): Promise<void> {
+        const articleRef = doc(db, 'users', userId, 'articles', articleId);
+        const updateData: any = { ...updates };
+        if (updateData.createdAt) {
+            updateData.createdAt = Timestamp.fromMillis(updateData.createdAt);
+        }
+        if (updateData.updatedAt) {
+            updateData.updatedAt = Timestamp.fromMillis(updateData.updatedAt);
+        }
+        if (updateData.scheduleDate) {
+            updateData.scheduleDate = Timestamp.fromMillis(updateData.scheduleDate);
+        }
+        await updateDoc(articleRef, updateData);
+    },
+
+    async delete(userId: string, articleId: string): Promise<void> {
+        const articleRef = doc(db, 'users', userId, 'articles', articleId);
+        await deleteDoc(articleRef);
+    }
+};
