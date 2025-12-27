@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Post, MediaItem, Settings } from './types';
+import type { Post, MediaItem, Settings, Article, ArticleVersion } from './types';
 
 interface AppState {
     posts: Post[];
     media: MediaItem[];
     settings: Settings;
+    articles: Article[];
     isLoading: boolean;
 
     // Actions
@@ -19,6 +20,12 @@ interface AppState {
 
     updateSettings: (updates: Partial<Settings>) => void;
     setLoading: (loading: boolean) => void;
+
+    // Article Actions
+    addArticle: (article: Article) => void;
+    updateArticle: (id: string, updates: Partial<Article>) => void;
+    deleteArticle: (id: string) => void;
+    addArticleVersion: (articleId: string, version: ArticleVersion) => void;
 }
 
 const defaultSettings: Settings = {
@@ -34,6 +41,7 @@ export const useStore = create<AppState>()(
             posts: [],
             media: [],
             settings: defaultSettings,
+            articles: [],
             isLoading: false,
 
             addPost: (post) => set((state) => ({ posts: [post, ...state.posts] })),
@@ -63,14 +71,41 @@ export const useStore = create<AppState>()(
             })),
 
             setLoading: (loading) => set({ isLoading: loading }),
+
+            // Article Actions
+            addArticle: (article) => set((state) => ({ articles: [article, ...state.articles] })),
+
+            updateArticle: (id, updates) => set((state) => ({
+                articles: state.articles.map((article) =>
+                    article.id === id ? { ...article, ...updates, updatedAt: Date.now() } : article
+                )
+            })),
+
+            deleteArticle: (id) => set((state) => ({
+                articles: state.articles.filter((article) => article.id !== id)
+            })),
+
+            addArticleVersion: (articleId, version) => set((state) => ({
+                articles: state.articles.map((article) =>
+                    article.id === articleId
+                        ? {
+                            ...article,
+                            currentVersionId: version.id,
+                            versions: [version, ...article.versions],
+                            updatedAt: Date.now()
+                        }
+                        : article
+                )
+            })),
         }),
         {
             name: 'wp-clone-storage',
             partialize: (state) => ({
                 posts: state.posts,
                 media: state.media,
-                settings: state.settings
-            }), // only persist data, not UI state like isLoading
+                settings: state.settings,
+                articles: state.articles
+            }),
         }
     )
 );

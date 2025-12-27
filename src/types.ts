@@ -26,3 +26,22 @@ export interface Settings {
     perplexityApiKey: string;
     theme: 'light' | 'dark' | 'system';
 }
+
+export interface ArticleVersion {
+    id: string;
+    content: string; // Markdown content
+    title: string;
+    createdAt: number;
+    generatedBy: 'ai' | 'user';
+}
+
+export interface Article {
+    id: string;
+    topic: string;
+    status: 'draft' | 'scheduled' | 'published';
+    scheduleDate?: number; // Timestamp
+    currentVersionId: string;
+    versions: ArticleVersion[];
+    createdAt: number;
+    updatedAt: number;
+}

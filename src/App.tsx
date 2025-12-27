@@ -9,6 +9,7 @@ import PostEditor from './pages/PostEditor';
 
 // Placeholder Pages
 import Media from './pages/Media';
+import AutoBlog from './pages/AutoBlog';
 
 function App() {
   const { settings } = useStore();
@@ -36,6 +37,7 @@ function App() {
           <Route path="posts/new" element={<PostEditor />} />
           <Route path="posts/:id" element={<PostEditor />} />
           <Route path="media" element={<Media />} />
+          <Route path="autoblog" element={<AutoBlog />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
