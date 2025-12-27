@@ -1,0 +1,77 @@
+
+import { NavLink } from 'react-router-dom';
+import {
+    LayoutDashboard,
+    FileText,
+    Image as ImageIcon,
+    Settings as SettingsIcon,
+    PlusCircle
+} from 'lucide-react';
+import clsx from 'clsx';
+import { useStore } from '../store';
+
+const Sidebar = () => {
+    const { settings } = useStore();
+
+    const navItems = [
+        { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/posts', icon: FileText, label: 'Posts' },
+        { to: '/media', icon: ImageIcon, label: 'Media' },
+    ];
+
+    return (
+        <aside className="w-64 h-screen fixed left-0 top-0 bg-slate-900 border-r border-slate-800 flex flex-col z-50">
+            <div className="p-6">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent truncate">
+                    {settings.siteTitle}
+                </h1>
+                <p className="text-sm text-slate-400 truncate mt-1">{settings.tagline}</p>
+            </div>
+
+            <nav className="flex-1 px-4 space-y-2">
+                {navItems.map((item) => (
+                    <NavLink
+                        key={item.to}
+                        to={item.to}
+                        className={({ isActive }) => clsx(
+                            'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300',
+                            isActive
+                                ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                                : 'text-slate-400 hover:text-indigo-300 hover:bg-slate-800/50'
+                        )}
+                    >
+                        <item.icon size={20} />
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                ))}
+
+                <div className="pt-6 mt-6 border-t border-slate-800">
+                    <NavLink
+                        to="/posts/new"
+                        className={({ isActive }) => clsx(
+                            'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 group',
+                            isActive
+                                ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-600/20'
+                                : 'text-slate-400 hover:text-emerald-300 hover:bg-slate-800/50'
+                        )}
+                    >
+                        <PlusCircle size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                        <span className="font-medium">New Post</span>
+                    </NavLink>
+                </div>
+            </nav>
+
+            <div className="p-4 border-t border-slate-800">
+                <button
+                    onClick={() => document.dispatchEvent(new CustomEvent('open-settings'))}
+                    className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+                >
+                    <SettingsIcon size={20} />
+                    <span className="font-medium">Settings</span>
+                </button>
+            </div>
+        </aside>
+    );
+};
+
+export default Sidebar;

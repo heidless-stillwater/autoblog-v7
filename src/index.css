@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20 active:scale-95;
+  }
+  .card {
+    @apply bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur-sm;
+  }
+  .input-field {
+    @apply w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all;
+  }
+}
