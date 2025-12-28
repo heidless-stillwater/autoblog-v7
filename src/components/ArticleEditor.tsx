@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { generateWithResearch } from '../services/aiService';
@@ -15,9 +15,19 @@ import {
     Send,
     Database
 } from 'lucide-react';
+import ImagePromptManager from './ImagePromptManager';
 import { format } from 'date-fns';
 import ResearchSelector from './ResearchSelector';
 import type { Article, ArticleVersion, PerplexityPrompt } from '../types';
+import { Trash2, MoveUp, MoveDown } from 'lucide-react';
+
+interface Block {
+    id: string;
+    type: 'text' | 'image';
+    content?: string;
+    alt?: string;
+    url?: string;
+}
 
 interface ArticleEditorProps {
     article: Article;
@@ -25,7 +35,19 @@ interface ArticleEditorProps {
 
 const ArticleEditor = ({ article }: ArticleEditorProps) => {
     const navigate = useNavigate();
-    const { updateArticle, addArticleVersion, addPost, settings, getResearchByTopic, addResearch, perplexityPrompts } = useStore();
+    const {
+        settings,
+        addArticleVersion,
+        updateArticle,
+        addPost,
+        perplexityPrompts,
+        getResearchByTopic,
+        addResearch,
+        updateArticleVersion,
+        syncHeroImages
+    } = useStore();
+
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const [currentVersionId, setCurrentVersionId] = useState(article.currentVersionId);
     const [showPreview, setShowPreview] = useState(false);
@@ -38,6 +60,75 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
     const currentVersion = article.versions.find(v => v.id === currentVersionId);
     const sortedVersions = [...article.versions].sort((a, b) => b.createdAt - a.createdAt);
+
+    // Local state for content to ensure smooth typing
+    const [localContent, setLocalContent] = useState(currentVersion?.content || '');
+    const [blocks, setBlocks] = useState<Block[]>([]);
+    const saveTimeoutRef = useRef<any>(null);
+
+    // Helpers for block conversion
+    const parseMarkdownToBlocks = (markdown: string): Block[] => {
+        const regex = /!\[([^\]]*)\]\(([^)]+)\)/gu;
+        let lastIndex = 0;
+        const newBlocks: Block[] = [];
+        let match;
+
+        while ((match = regex.exec(markdown)) !== null) {
+            // Text block before the image
+            if (match.index > lastIndex) {
+                const text = markdown.slice(lastIndex, match.index);
+                if (text.length > 0 || newBlocks.length === 0) {
+                    newBlocks.push({
+                        id: `text-${Math.random().toString(36).substr(2, 9)}`,
+                        type: 'text',
+                        content: text
+                    });
+                }
+            }
+            // Image block
+            newBlocks.push({
+                id: `img-${Math.random().toString(36).substr(2, 9)}`,
+                type: 'image',
+                alt: match[1],
+                url: match[2]
+            });
+            lastIndex = regex.lastIndex;
+        }
+
+        // Final text block
+        if (lastIndex < markdown.length) {
+            newBlocks.push({
+                id: `text-${Math.random().toString(36).substr(2, 9)}`,
+                type: 'text',
+                content: markdown.slice(lastIndex)
+            });
+        }
+
+        // Ensure at least one text block if empty
+        if (newBlocks.length === 0) {
+            newBlocks.push({
+                id: `text-${Math.random().toString(36).substr(2, 9)}`,
+                type: 'text',
+                content: ''
+            });
+        }
+
+        return newBlocks;
+    };
+
+    const serializeBlocksToMarkdown = (blockArray: Block[]): string => {
+        return blockArray.map(b =>
+            b.type === 'text' ? b.content : `![${b.alt}](${b.url})`
+        ).join('');
+    };
+
+    // Sync local content and blocks when version changes
+    useEffect(() => {
+        if (currentVersion) {
+            setLocalContent(currentVersion.content);
+            setBlocks(parseMarkdownToBlocks(currentVersion.content));
+        }
+    }, [currentVersionId, article.versions]);
 
     // Get research info for current version
     const currentResearch = currentVersion?.researchId
@@ -151,6 +242,83 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         alert('Schedule updated!');
     };
 
+    const handleUpdateContent = (newContent: string) => {
+        setLocalContent(newContent);
+        // Also update blocks if this came from outside (like image insertion)
+        setBlocks(parseMarkdownToBlocks(newContent));
+
+        // Debounce store update
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            if (currentVersion) {
+                try {
+                    await updateArticleVersion(article.id, currentVersion.id, { content: newContent });
+                } catch (error) {
+                    console.error('Failed to auto-save:', error);
+                }
+            }
+        }, 1000);
+    };
+
+    const updateBlockContent = (id: string, content: string) => {
+        const newBlocks = blocks.map(b => b.id === id ? { ...b, content } : b);
+        setBlocks(newBlocks);
+        const newMarkdown = serializeBlocksToMarkdown(newBlocks);
+        setLocalContent(newMarkdown);
+
+        // Debounce store update
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+            if (currentVersion) {
+                try {
+                    await updateArticleVersion(article.id, currentVersion.id, { content: newMarkdown });
+                } catch (error) {
+                    console.error('Failed to auto-save:', error);
+                }
+            }
+        }, 1000);
+    };
+
+    const deleteBlock = (id: string) => {
+        const newBlocks = blocks.filter(b => b.id !== id);
+        // Ensure at least one text block
+        if (newBlocks.length === 0 || !newBlocks.some(b => b.type === 'text')) {
+            newBlocks.push({ id: `text-${Date.now()}`, type: 'text', content: '' });
+        }
+        setBlocks(newBlocks);
+        handleUpdateContent(serializeBlocksToMarkdown(newBlocks));
+    };
+
+    const moveBlock = (index: number, direction: 'up' | 'down') => {
+        const newBlocks = [...blocks];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex >= 0 && targetIndex < newBlocks.length) {
+            [newBlocks[index], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[index]];
+            setBlocks(newBlocks);
+            handleUpdateContent(serializeBlocksToMarkdown(newBlocks));
+        }
+    };
+
+    const handleSyncHero = async () => {
+        setIsRefreshing(true);
+        try {
+            await syncHeroImages([article.id], true); // Force sync for individual article
+            alert('Hero image synced from content!');
+        } catch (error) {
+            console.error('Sync hero failed:', error);
+            alert('Failed to sync hero image.');
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    // Clean up timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, []);
+
     if (!currentVersion) {
         return <div className="text-center py-12 text-slate-400">Version not found</div>;
     }
@@ -209,8 +377,36 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                         <Send size={18} />
                         <span>Publish to Posts</span>
                     </button>
+                    <button
+                        onClick={handleSyncHero}
+                        disabled={isRefreshing}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700"
+                        title="Sync Hero Image from Content"
+                    >
+                        <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                    </button>
                 </div>
             </div>
+
+            {/* Hero Image Preview */}
+            {article.heroImage && (
+                <div className="relative h-48 w-full group overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+                    <img src={article.heroImage} className="w-full h-full object-cover" alt="Hero" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
+                    <div className="absolute bottom-4 left-6 flex items-end justify-between right-6">
+                        <div>
+                            <span className="px-2 py-1 bg-indigo-500 text-white text-[10px] font-bold rounded uppercase tracking-wider">Hero Image</span>
+                        </div>
+                        <button
+                            onClick={handleSyncHero}
+                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors bg-slate-950/50 px-2 py-1 rounded"
+                        >
+                            <RefreshCw size={10} />
+                            Change Hero
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Version Selector & Schedule */}
             <div className="flex flex-col md:flex-row gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
@@ -262,7 +458,12 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden">
                 {showPreview ? (
                     <div className="p-8">
-                        <MarkdownRenderer content={currentVersion.content} />
+                        {(() => {
+                            console.log('Preview localContent:', localContent);
+                            console.log('Preview currentVersion.content:', currentVersion.content);
+                            return null;
+                        })()}
+                        <MarkdownRenderer content={localContent} />
                     </div>
                 ) : (
                     <div className="p-6">
@@ -270,7 +471,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                             <div className="flex items-center gap-2 text-slate-400">
                                 <FileText size={18} />
                                 <span className="text-sm">
-                                    {currentVersion.content.split(/\s+/).length} words
+                                    {localContent.split(/\s+/).filter(Boolean).length} words
                                 </span>
                             </div>
                             {currentVersion.generatedBy === 'ai' && (
@@ -280,8 +481,69 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                                 </div>
                             )}
                         </div>
-                        <div className="bg-black/20 rounded-lg p-6 font-mono text-sm text-slate-300 max-h-[600px] overflow-y-auto">
-                            <pre className="whitespace-pre-wrap">{currentVersion.content}</pre>
+                        <div className="space-y-4 min-h-[500px]">
+                            {blocks.map((block, index) => (
+                                <div key={block.id} className="relative group">
+                                    {block.type === 'text' ? (
+                                        <textarea
+                                            value={block.content}
+                                            onChange={(e) => updateBlockContent(block.id, e.target.value)}
+                                            placeholder="Continue writing..."
+                                            className="w-full bg-transparent text-lg text-slate-300 placeholder-slate-700 outline-none resize-none font-mono leading-relaxed px-4 py-2 border-l-2 border-transparent focus:border-indigo-500/50 transition-colors"
+                                            style={{ height: 'auto', minHeight: '60px' }}
+                                            onInput={(e) => {
+                                                const target = e.target as HTMLTextAreaElement;
+                                                target.style.height = 'auto';
+                                                target.style.height = target.scrollHeight + 'px';
+                                            }}
+                                            ref={(el) => {
+                                                if (el) {
+                                                    el.style.height = 'auto';
+                                                    el.style.height = el.scrollHeight + 'px';
+                                                }
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="mx-4 my-6 relative rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50 group/img shadow-2xl">
+                                            <img
+                                                src={block.url}
+                                                alt={block.alt}
+                                                className="w-full h-auto max-h-[600px] object-contain"
+                                            />
+                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => moveBlock(index, 'up')}
+                                                    disabled={index === 0}
+                                                    title="Move block up"
+                                                    className="p-2 bg-slate-900/80 backdrop-blur text-slate-400 hover:text-white rounded-lg border border-slate-700 disabled:opacity-30"
+                                                >
+                                                    <MoveUp size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => moveBlock(index, 'down')}
+                                                    disabled={index === blocks.length - 1}
+                                                    title="Move block down"
+                                                    className="p-2 bg-slate-900/80 backdrop-blur text-slate-400 hover:text-white rounded-lg border border-slate-700 disabled:opacity-30"
+                                                >
+                                                    <MoveDown size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteBlock(block.id)}
+                                                    title="Delete block"
+                                                    className="p-2 bg-red-500/80 backdrop-blur text-white rounded-lg border border-red-500/50 hover:bg-red-600 transition-colors"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+                                                <p className="text-xs text-slate-400 italic">
+                                                    {block.alt || 'No description'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                         {currentResearch && (
                             <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
@@ -297,6 +559,14 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                     </div>
                 )}
             </div>
+
+            {/* Image Prompt Management */}
+            <ImagePromptManager
+                articleId={article.id}
+                topic={article.topic}
+                content={currentVersion?.content || ''}
+                onUpdateContent={handleUpdateContent}
+            />
 
             {/* Version History */}
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">

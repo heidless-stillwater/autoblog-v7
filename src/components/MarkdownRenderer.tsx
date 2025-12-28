@@ -52,6 +52,17 @@ const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) =>
                 {children}
             </blockquote>
         ),
+        img: (props) => {
+            const { src, alt } = props;
+            if (!src) return null;
+            return (
+                <img
+                    src={src}
+                    alt={alt || ''}
+                    className="w-full h-auto max-w-full rounded-lg my-6 border border-slate-800"
+                />
+            );
+        },
     };
 
     return (
@@ -59,6 +70,7 @@ const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) =>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={components}
+                urlTransform={(url) => url.startsWith('data:') ? url : url}
             >
                 {content}
             </ReactMarkdown>

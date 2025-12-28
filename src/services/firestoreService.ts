@@ -7,12 +7,13 @@ import {
     updateDoc,
     deleteDoc,
     query,
+    where,
     orderBy,
     Timestamp,
     setDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { Post, MediaItem, Settings, Article, TopicSet } from '../types';
+import type { Post, MediaItem, Settings, Article, TopicSet, ImagePrompt } from '../types';
 
 // Helper to convert Firestore timestamp to number
 const timestampToNumber = (timestamp: any): number => {
@@ -197,8 +198,59 @@ export const topicSetsService = {
         await updateDoc(docRef, updateData);
     },
 
-    async delete(userId: string, id: string): Promise<void> {
+    delete(userId: string, id: string): Promise<void> {
         const docRef = doc(db, 'users', userId, 'topicSets', id);
+        return deleteDoc(docRef);
+    }
+};
+
+// Image Prompts Service
+export const imagePromptsService = {
+    async getAll(userId: string): Promise<ImagePrompt[]> {
+        const promptsRef = collection(db, 'users', userId, 'imagePrompts');
+        const q = query(promptsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt)
+        } as ImagePrompt));
+    },
+
+    async getByArticle(userId: string, articleId: string): Promise<ImagePrompt[]> {
+        const promptsRef = collection(db, 'users', userId, 'imagePrompts');
+        const q = query(promptsRef, where('articleId', '==', articleId), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt)
+        } as ImagePrompt));
+    },
+
+    async create(userId: string, prompt: Omit<ImagePrompt, 'id'>): Promise<string> {
+        const promptsRef = collection(db, 'users', userId, 'imagePrompts');
+        const docRef = await addDoc(promptsRef, {
+            ...prompt,
+            createdAt: Timestamp.fromMillis(prompt.createdAt),
+            updatedAt: Timestamp.fromMillis(prompt.updatedAt)
+        });
+        return docRef.id;
+    },
+
+    async update(userId: string, id: string, updates: Partial<ImagePrompt>): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'imagePrompts', id);
+        const updateData: any = { ...updates };
+        if (updateData.updatedAt) {
+            updateData.updatedAt = Timestamp.fromMillis(updateData.updatedAt);
+        }
+        await updateDoc(docRef, updateData);
+    },
+
+    async delete(userId: string, id: string): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'imagePrompts', id);
         await deleteDoc(docRef);
     }
 };

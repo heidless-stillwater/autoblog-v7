@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet } from './types';
-import { postsService, mediaService, settingsService, articlesService, topicSetsService } from './services/firestoreService';
+import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt } from './types';
+import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService } from './services/firestoreService';
 import { perplexityService } from './services/perplexityService';
 
 interface AppState {
@@ -11,6 +11,7 @@ interface AppState {
     settings: Settings;
     articles: Article[];
     perplexityPrompts: PerplexityPrompt[];
+    imagePrompts: ImagePrompt[];
     isLoading: boolean;
 
     // User Actions
@@ -40,6 +41,8 @@ interface AppState {
     updateArticle: (id: string, updates: Partial<Article>) => Promise<void>;
     deleteArticle: (id: string) => Promise<void>;
     addArticleVersion: (articleId: string, version: ArticleVersion) => Promise<void>;
+    updateArticleVersion: (articleId: string, versionId: string, updates: Partial<ArticleVersion>) => Promise<void>;
+    syncHeroImages: (articleIds?: string[], force?: boolean) => Promise<{ updated: number; failed: number }>;
 
     // Research Actions
     loadResearch: (userId: string) => Promise<void>;
@@ -51,6 +54,12 @@ interface AppState {
     addTopicSet: (topicSet: Omit<TopicSet, 'id'>) => Promise<void>;
     deleteTopicSet: (id: string) => Promise<void>;
     importTopicSets: (topicSets: TopicSet[]) => Promise<void>;
+
+    // Image Prompt Actions
+    addImagePrompt: (prompt: Omit<ImagePrompt, 'id'>) => Promise<void>;
+    updateImagePrompt: (id: string, updates: Partial<ImagePrompt>) => Promise<void>;
+    deleteImagePrompt: (id: string) => Promise<void>;
+    loadImagePrompts: (articleId?: string) => Promise<void>;
 
     // Clear all data on logout
     clearData: () => void;
@@ -74,6 +83,7 @@ export const useStore = create<AppState>()((set, get) => ({
     settings: defaultSettings,
     articles: [],
     perplexityPrompts: [],
+    imagePrompts: [],
     isLoading: false,
 
     // User Actions
@@ -83,13 +93,14 @@ export const useStore = create<AppState>()((set, get) => ({
     loadUserData: async (userId: string) => {
         set({ isLoading: true });
         try {
-            const [posts, media, settings, articles, perplexityPrompts, topicSets] = await Promise.all([
+            const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts] = await Promise.all([
                 postsService.getAll(userId),
                 mediaService.getAll(userId),
                 settingsService.get(userId),
                 articlesService.getAll(userId),
                 perplexityService.getAllResearch(userId),
-                topicSetsService.getAll(userId)
+                topicSetsService.getAll(userId),
+                imagePromptsService.getAll(userId)
             ]);
 
             set({
@@ -99,6 +110,7 @@ export const useStore = create<AppState>()((set, get) => ({
                 articles,
                 perplexityPrompts,
                 topicSets,
+                imagePrompts,
                 isLoading: false
             });
         } catch (error) {
@@ -315,6 +327,90 @@ export const useStore = create<AppState>()((set, get) => ({
         }
     },
 
+    updateArticleVersion: async (articleId, versionId, updates) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        try {
+            const article = get().articles.find(a => a.id === articleId);
+            if (!article) throw new Error('Article not found');
+
+            const updatedVersions = article.versions.map(v =>
+                v.id === versionId ? { ...v, ...updates } : v
+            );
+
+            await articlesService.update(user.uid, articleId, {
+                versions: updatedVersions,
+                updatedAt: Date.now()
+            });
+
+            set((state) => ({
+                articles: state.articles.map((a) =>
+                    a.id === articleId ? { ...a, versions: updatedVersions, updatedAt: Date.now() } : a
+                )
+            }));
+        } catch (error) {
+            console.error('Error updating article version:', error);
+            throw error;
+        }
+    },
+
+    syncHeroImages: async (articleIds, force = false) => {
+        const { user, articles } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        const targetArticles = articleIds
+            ? articles.filter(a => articleIds.includes(a.id))
+            : articles;
+
+        let updated = 0;
+        let failed = 0;
+
+        for (const article of targetArticles) {
+            // Only sync if hero image is missing/empty 
+            // Handle undefined, null, empty string, whitespace, or stringified null/undefined
+            const currentHero = article.heroImage;
+            const isMissing = !currentHero ||
+                (typeof currentHero === 'string' && (
+                    currentHero.trim() === '' ||
+                    currentHero === 'null' ||
+                    currentHero === 'undefined'
+                ));
+
+            if (isMissing || force) {
+                const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
+                if (!currentVersion) continue;
+
+                // Match first markdown image: ![alt](url)
+                // Use [^\]] for alt and [^)] for url to be more robust with long data URIs and complex alt text
+                const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/u;
+                const match = currentVersion.content.match(imgRegex);
+
+                if (match && match[2]) {
+                    const firstImageUrl = match[2];
+                    try {
+                        await articlesService.update(user.uid, article.id, {
+                            heroImage: firstImageUrl,
+                            updatedAt: Date.now()
+                        });
+
+                        set((state) => ({
+                            articles: state.articles.map((a) =>
+                                a.id === article.id ? { ...a, heroImage: firstImageUrl, updatedAt: Date.now() } : a
+                            )
+                        }));
+                        updated++;
+                    } catch (error) {
+                        console.error(`[SyncHero] Failed to update article ${article.id}:`, error);
+                        failed++;
+                    }
+                }
+            }
+        }
+
+        return { updated, failed };
+    },
+
     // Research Actions
     loadResearch: async (userId: string) => {
         set({ isLoading: true });
@@ -450,6 +546,81 @@ export const useStore = create<AppState>()((set, get) => ({
         }
     },
 
+    // Image Prompt Actions
+    addImagePrompt: async (prompt) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            const id = await imagePromptsService.create(user.uid, prompt);
+            const newPrompt = { ...prompt, id };
+            set((state) => ({
+                imagePrompts: [newPrompt, ...state.imagePrompts],
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error adding image prompt:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    updateImagePrompt: async (id, updates) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            const updatedData = { ...updates, updatedAt: Date.now() };
+            await imagePromptsService.update(user.uid, id, updatedData);
+            set((state) => ({
+                imagePrompts: state.imagePrompts.map((p) =>
+                    p.id === id ? { ...p, ...updatedData } : p
+                ),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error updating image prompt:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    deleteImagePrompt: async (id) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await imagePromptsService.delete(user.uid, id);
+            set((state) => ({
+                imagePrompts: state.imagePrompts.filter((p) => p.id !== id),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error deleting image prompt:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    loadImagePrompts: async (articleId) => {
+        const { user } = get();
+        if (!user) return;
+
+        set({ isLoading: true });
+        try {
+            const prompts = articleId
+                ? await imagePromptsService.getByArticle(user.uid, articleId)
+                : await imagePromptsService.getAll(user.uid);
+            set({ imagePrompts: prompts, isLoading: false });
+        } catch (error) {
+            console.error('Error loading image prompts:', error);
+            set({ isLoading: false });
+        }
+    },
+
     // Clear all data on logout
     clearData: () => set({
         user: null,
@@ -459,6 +630,12 @@ export const useStore = create<AppState>()((set, get) => ({
         articles: [],
         perplexityPrompts: [],
         topicSets: [],
+        imagePrompts: [],
         isLoading: false
     })
 }));
+
+// Expose store for testing
+if (typeof window !== 'undefined') {
+    (window as any).__STORE__ = useStore;
+}

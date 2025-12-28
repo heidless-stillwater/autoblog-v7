@@ -572,3 +572,142 @@ ${content}
         return { content: '', error: error instanceof Error ? error.message : 'Unknown error occurred' };
     }
 };
+
+/**
+ * Interface for the structured image prompt response
+ */
+export interface ImagePromptDraft {
+    sectionTitle: string;
+    prompt: string;
+}
+
+/**
+ * Generates image prompts for major blog sections
+ */
+export const generateImagePrompts = async (content: string, settings: Settings): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
+    if (!settings.perplexityApiKey) {
+        return { prompts: [], error: 'Perplexity API Key is missing. Please add it in Settings.' };
+    }
+
+    const promptText = `Analyze the following blog post and identify EXACTLY 8 major sections (including introduction, conclusion, and key subsections). 
+For each identified section, create a highly detailed, photorealistic image generation prompt for NanoBanana.
+
+Rules:
+1. Use the EXACT text of the section's header from the markdown as the "sectionTitle". If a section doesn't have a clear header (like the introduction), use the most representative phrase or "Introduction".
+2. The first prompt MUST relate to the introduction or the most representative "hero" hook of the post.
+3. Limit to exactly 8 sections/prompts. If the post has fewer than 8 sections, identify logical visual breaks within longer sections to reach 8.
+4. Each prompt should be a vivid description of a scene or concept related to that section, suitable for high-quality AI image generation.
+5. Output ONLY a JSON array of objects with keys: "sectionTitle" and "prompt".
+
+Blog Post Content:
+${content}
+`;
+
+    try {
+        const response = await fetch('/api/perplexity/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${settings.perplexityApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: settings.perplexityModel || 'sonar',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a creative assistant that specializes in visual storytelling and AI image prompts. You always output valid JSON.'
+                    },
+                    {
+                        role: 'user',
+                        content: promptText
+                    }
+                ],
+                max_tokens: 2048,
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return { prompts: [], error: errorData.error?.message || `API Error: ${response.statusText}` };
+        }
+
+        const data = await response.json();
+        let contentStr = data.choices[0].message.content;
+
+        // Sometimes LLMs wrap JSON in code blocks despite being asked not to
+        if (contentStr.includes('```json')) {
+            contentStr = contentStr.split('```json')[1].split('```')[0].trim();
+        } else if (contentStr.includes('```')) {
+            contentStr = contentStr.split('```')[1].split('```')[0].trim();
+        }
+
+        try {
+            const parsed = JSON.parse(contentStr);
+            // Handle both { "prompts": [...] } and directly [...]
+            const prompts = Array.isArray(parsed) ? parsed : (parsed.prompts || []);
+            return { prompts: prompts.slice(0, 8) };
+        } catch (parseError) {
+            console.error('Failed to parse AI response as JSON:', contentStr);
+            return { prompts: [], error: 'Failed to parse AI response. The model may have returned malformed data.' };
+        }
+    } catch (error) {
+        return { prompts: [], error: error instanceof Error ? error.message : 'Unknown error occurred' };
+    }
+};
+
+/**
+ * Generates an image using NanoBanana (Gemini)
+ */
+export const generateImage = async (prompt: string, settings: Settings): Promise<{ imageUrl?: string, error?: string }> => {
+    if (!settings.geminiApiKey) {
+        return { error: 'Gemini API Key is missing. Please add it in Settings.' };
+    }
+
+    const models = [
+        'gemini-3-pro-image-preview',
+        'imagen-3.0-generate-001',
+        'gemini-2.0-flash-exp'
+    ];
+
+    let lastError = '';
+
+    for (const model of models) {
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiApiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const msg = errorData.error?.message || `API Error: ${response.statusText}`;
+                console.error(`NanoBanana attempt with ${model} failed:`, msg);
+                lastError = msg;
+                continue; // Try next model
+            }
+
+            const data = await response.json();
+            const base64Data = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData?.data;
+
+            if (base64Data) {
+                return { imageUrl: `data:image/png;base64,${base64Data}` };
+            }
+
+            lastError = 'No image data returned from API for ' + model;
+        } catch (error) {
+            lastError = error instanceof Error ? error.message : 'Unknown error occurred';
+            console.error(`NanoBanana attempt with ${model} errored:`, lastError);
+        }
+    }
+
+    return { error: `All NanoBanana models failed. Last error: ${lastError}` };
+};

@@ -69,6 +69,16 @@ export interface Article {
     heroImage?: string; // Generated image URL
 }
 
+export interface ImagePrompt {
+    id: string;
+    articleId: string;
+    topic: string; // Added to identify by topic in question
+    sectionTitle: string;
+    prompt: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
 export interface User {
     uid: string;
     email: string | null;

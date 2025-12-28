@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { format } from 'date-fns';
-import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search, Image as ImageIcon } from 'lucide-react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import AutoBlogGenerator from '../components/AutoBlogGenerator';
 import ArticleEditor from '../components/ArticleEditor';
 import TopicSelector from '../components/TopicSelector';
@@ -11,7 +11,7 @@ import type { Article, ArticleVersion } from '../types';
 import { rewriteToStyle, optimizeForSEO } from '../services/aiService';
 
 const AutoBlog = () => {
-    const { articles, deleteArticle, addPost } = useStore();
+    const { articles, deleteArticle, addPost, syncHeroImages } = useStore();
     const navigate = useNavigate();
     const { id } = useParams();
     const [view, setView] = useState<'list' | 'create'>('list');
@@ -62,7 +62,7 @@ const AutoBlog = () => {
             navigate('/blog');
             return null;
         }
-        return <ArticleEditor article={article} />;
+        return <ArticleEditor key={article.id} article={article} />;
     }
 
     const sortedArticles = [...articles].sort((a, b) => b.createdAt - a.createdAt);
@@ -171,6 +171,23 @@ const AutoBlog = () => {
         }
     };
 
+    const handleSyncHeroImages = async () => {
+        const targetIds = Array.from(selectedIds);
+        if (targetIds.length === 0) return;
+
+        setIsRefreshing(true);
+        try {
+            const result = await syncHeroImages(targetIds);
+            alert(`Hero image sync complete!\nUpdated: ${result.updated}\nFailed: ${result.failed}\n\nNote: Only articles missing a hero image are updated using the first image found in their content.`);
+            setSelectedIds(new Set());
+        } catch (error) {
+            console.error('Sync hero images failed:', error);
+            alert('An error occurred during the hero image sync.');
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const handleOptimizeSelectedSEO = () => {
         const hasSelected = articles.some(a => selectedIds.has(a.id));
         if (!hasSelected) return;
@@ -246,6 +263,15 @@ const AutoBlog = () => {
                     <div className="flex items-center gap-3">
                         {articles.length > 0 && selectedIds.size > 0 && (
                             <>
+                                <button
+                                    onClick={handleSyncHeroImages}
+                                    disabled={isRefreshing}
+                                    className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-purple-500/20"
+                                    title={`Sync Hero Images for ${selectedIds.size} selected articles`}
+                                >
+                                    <ImageIcon size={18} className={isRefreshing ? "animate-spin" : ""} />
+                                    {isRefreshing ? 'Syncing...' : `Sync Hero (${selectedIds.size})`}
+                                </button>
                                 <button
                                     onClick={handleOptimizeSelectedSEO}
                                     disabled={isRefreshing}
@@ -422,21 +448,27 @@ const AutoBlog = () => {
                                     )}
 
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                        <div className="flex items-start gap-4">
+                                        <div className="flex items-center gap-4">
                                             <button
                                                 onClick={() => handleToggleSelect(article.id)}
-                                                className={`mt-1 flex-shrink-0 transition-colors ${selectedIds.has(article.id) ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
+                                                className={`flex-shrink-0 transition-colors ${selectedIds.has(article.id) ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
                                             >
                                                 {selectedIds.has(article.id) ? <CheckSquare size={20} /> : <Square size={20} />}
                                             </button>
 
-                                            <div className="p-2 bg-slate-800 rounded-lg text-slate-400">
-                                                <FileText size={20} />
+                                            <div className="w-12 h-12 flex-shrink-0 bg-slate-800 rounded-lg overflow-hidden flex items-center justify-center text-slate-400 border border-slate-700/50">
+                                                {article.heroImage ? (
+                                                    <img src={article.heroImage} className="w-full h-full object-cover" alt="" />
+                                                ) : (
+                                                    <FileText size={20} />
+                                                )}
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">
-                                                    {article.topic}
-                                                </h3>
+                                                <Link to={`/blog/${article.id}`} className="block">
+                                                    <h3 className="text-lg font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">
+                                                        {article.topic}
+                                                    </h3>
+                                                </Link>
                                                 <div className="flex items-center gap-4 text-xs text-slate-500">
                                                     <span className="flex items-center gap-1">
                                                         <Clock size={12} />
