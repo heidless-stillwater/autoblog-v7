@@ -22,7 +22,7 @@ vi.mock('../components/SEOKeywordsModal', () => ({
 }));
 
 describe('AutoBlog Component', () => {
-    const mockNavigate = vi.fn();
+    // const mockNavigate = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();

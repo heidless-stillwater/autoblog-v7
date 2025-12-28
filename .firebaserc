@@ -1,5 +1,22 @@
 {
   "projects": {
     "default": "heidless-firebase"
-  }
+  },
+  "targets": {
+    "wp-clone-steampunk-34213": {
+      "hosting": {
+        "autoblog": [
+          "autoblog-steampunk-34213"
+        ]
+      }
+    },
+    "heidless-firebase": {
+      "hosting": {
+        "autoblog": [
+          "autoblog-v7"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

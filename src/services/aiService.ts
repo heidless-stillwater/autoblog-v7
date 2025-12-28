@@ -12,6 +12,9 @@ export interface ResearchResponse {
     researchResponse?: string;
 }
 
+const PERPLEXITY_API_URL = import.meta.env.DEV ? '/api/perplexity' : 'https://api.perplexity.ai';
+const GEMINI_API_URL = import.meta.env.DEV ? '/api/gemini' : 'https://generativelanguage.googleapis.com';
+
 export const BLOG_STYLE_GUIDE = `# 🎤 Blog Tone & Style Guide: “Entertain While You Educate”
 
 ## 🎭 Voice & Personality
@@ -111,7 +114,7 @@ export const generatePostContent = async (topic: string, settings: Settings): Pr
     }
 
     try {
-        const response = await fetch('/api/perplexity/chat/completions', {
+        const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -174,7 +177,7 @@ export const generateFullArticle = async (topic: string, settings: Settings): Pr
     `;
 
     try {
-        const response = await fetch('/api/perplexity/chat/completions', {
+        const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -237,7 +240,7 @@ export const generateWithResearch = async (
             // Generate new research
             researchPrompt = `Conduct comprehensive research on the topic: "${topic}". Gather recent insights, statistics, examples, case studies, and expert opinions. Focus on factual, up-to-date information that would be valuable for a blog article.`;
 
-            const researchResult = await fetch('/api/perplexity/chat/completions', {
+            const researchResult = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -286,7 +289,7 @@ export const generateWithResearch = async (
     ${ARTICLE_GUIDELINES}
     `;
 
-        const articleResult = await fetch('/api/perplexity/chat/completions', {
+        const articleResult = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -331,7 +334,7 @@ export const generateTopics = async (seed: string, settings: Settings): Promise<
     }
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
+        const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -410,7 +413,7 @@ export const rewriteToStyle = async (content: string, settings: Settings): Promi
     `;
 
     try {
-        const response = await fetch('/api/perplexity/chat/completions', {
+        const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -453,7 +456,7 @@ export const generateSEOKeywords = async (content: string, settings: Settings): 
     }
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
+        const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -535,7 +538,7 @@ ${content}
 `;
 
     try {
-        const response = await fetch('/api/perplexity/chat/completions', {
+        const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${settings.perplexityApiKey}`,
@@ -600,7 +603,7 @@ ${content}
 `;
 
     try {
-        const response = await fetch(`/api/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
+        const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -664,7 +667,7 @@ export const generateImage = async (prompt: string, settings: Settings): Promise
 
     for (const model of models) {
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiApiKey}`, {
+            const response = await fetch(`${GEMINI_API_URL}/v1beta/models/${model}:generateContent?key=${settings.geminiApiKey}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

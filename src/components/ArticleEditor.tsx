@@ -48,6 +48,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     } = useStore();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isVersionHistoryCollapsed, setIsVersionHistoryCollapsed] = useState(true);
 
     const [currentVersionId, setCurrentVersionId] = useState(article.currentVersionId);
     const [showPreview, setShowPreview] = useState(false);
@@ -654,33 +655,44 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
             {/* Version History */}
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
-                <h3 className="text-lg font-bold text-white mb-4">Version History</h3>
-                <div className="space-y-2">
-                    {sortedVersions.map((version, index) => (
-                        <div
-                            key={version.id}
-                            className={`p-4 rounded-lg border transition-colors cursor-pointer ${version.id === currentVersionId
-                                ? 'bg-indigo-500/10 border-indigo-500/30'
-                                : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
-                                }`}
-                            onClick={() => handleVersionChange(version.id)}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="font-medium text-white">
-                                        Version {sortedVersions.length - index}
-                                    </p>
-                                    <p className="text-sm text-slate-400">
-                                        {format(version.createdAt, 'MMM d, yyyy h:mm a')} • {version.generatedBy}
-                                    </p>
-                                </div>
-                                <div className="text-sm text-slate-500">
-                                    {version.content.split(/\s+/).length} words
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">Version History</h3>
+                    <button
+                        onClick={() => setIsVersionHistoryCollapsed(!isVersionHistoryCollapsed)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                    >
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isVersionHistoryCollapsed ? '' : 'rotate-180'}`} />
+                        {isVersionHistoryCollapsed ? 'Expand' : 'Collapse'}
+                    </button>
+                </div>
+                {!isVersionHistoryCollapsed && (
+                    <div className="space-y-2">
+                        {sortedVersions.map((version, index) => (
+                            <div
+                                key={version.id}
+                                className={`p-4 rounded-lg border transition-colors cursor-pointer ${version.id === currentVersionId
+                                    ? 'bg-indigo-500/10 border-indigo-500/30'
+                                    : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                                    }`}
+                                onClick={() => handleVersionChange(version.id)}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="font-medium text-white">
+                                            Version {sortedVersions.length - index}
+                                        </p>
+                                        <p className="text-sm text-slate-400">
+                                            {format(version.createdAt, 'MMM d, yyyy h:mm a')} • {version.generatedBy}
+                                        </p>
+                                    </div>
+                                    <div className="text-sm text-slate-500">
+                                        {version.content.split(/\s+/).length} words
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
