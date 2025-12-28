@@ -1,6 +1,5 @@
 import { X } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from './MarkdownRenderer';
 import { format } from 'date-fns';
 import type { Post } from '../types';
 
@@ -57,11 +56,7 @@ const PostPreviewModal = ({ isOpen, onClose, post }: PostPreviewModalProps) => {
                             </div>
                         </header>
 
-                        <div className="prose prose-invert prose-indigo max-w-none">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {post.content || ''}
-                            </ReactMarkdown>
-                        </div>
+                        <MarkdownRenderer content={(post.content || '').trim()} />
                     </div>
                 </article>
             </div>

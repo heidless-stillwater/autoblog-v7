@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { Post, MediaItem, Settings, Article, ArticleVersion, User } from './types';
-import { postsService, mediaService, settingsService, articlesService } from './services/firestoreService';
+import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet } from './types';
+import { postsService, mediaService, settingsService, articlesService, topicSetsService } from './services/firestoreService';
+import { perplexityService } from './services/perplexityService';
 
 interface AppState {
     // State
@@ -9,6 +10,7 @@ interface AppState {
     media: MediaItem[];
     settings: Settings;
     articles: Article[];
+    perplexityPrompts: PerplexityPrompt[];
     isLoading: boolean;
 
     // User Actions
@@ -39,6 +41,17 @@ interface AppState {
     deleteArticle: (id: string) => Promise<void>;
     addArticleVersion: (articleId: string, version: ArticleVersion) => Promise<void>;
 
+    // Research Actions
+    loadResearch: (userId: string) => Promise<void>;
+    addResearch: (research: Omit<PerplexityPrompt, 'id'>) => Promise<string>;
+    getResearchByTopic: (topic: string) => PerplexityPrompt[];
+
+    // Topic Set Actions
+    topicSets: TopicSet[];
+    addTopicSet: (topicSet: Omit<TopicSet, 'id'>) => Promise<void>;
+    deleteTopicSet: (id: string) => Promise<void>;
+    importTopicSets: (topicSets: TopicSet[]) => Promise<void>;
+
     // Clear all data on logout
     clearData: () => void;
 }
@@ -47,7 +60,10 @@ const defaultSettings: Settings = {
     siteTitle: 'My Awesome Blog',
     tagline: 'Just another WordPress clone',
     perplexityApiKey: '',
+    geminiApiKey: '',
+    perplexityModel: 'sonar',
     theme: 'system',
+    customSeeds: [],
 };
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -57,6 +73,7 @@ export const useStore = create<AppState>()((set, get) => ({
     media: [],
     settings: defaultSettings,
     articles: [],
+    perplexityPrompts: [],
     isLoading: false,
 
     // User Actions
@@ -66,18 +83,22 @@ export const useStore = create<AppState>()((set, get) => ({
     loadUserData: async (userId: string) => {
         set({ isLoading: true });
         try {
-            const [posts, media, settings, articles] = await Promise.all([
+            const [posts, media, settings, articles, perplexityPrompts, topicSets] = await Promise.all([
                 postsService.getAll(userId),
                 mediaService.getAll(userId),
                 settingsService.get(userId),
-                articlesService.getAll(userId)
+                articlesService.getAll(userId),
+                perplexityService.getAllResearch(userId),
+                topicSetsService.getAll(userId)
             ]);
 
             set({
                 posts,
                 media,
-                settings: settings || defaultSettings,
+                settings: settings ? { ...defaultSettings, ...settings } : defaultSettings,
                 articles,
+                perplexityPrompts,
+                topicSets,
                 isLoading: false
             });
         } catch (error) {
@@ -294,6 +315,141 @@ export const useStore = create<AppState>()((set, get) => ({
         }
     },
 
+    // Research Actions
+    loadResearch: async (userId: string) => {
+        set({ isLoading: true });
+        try {
+            const perplexityPrompts = await perplexityService.getAllResearch(userId);
+            set({ perplexityPrompts, isLoading: false });
+        } catch (error) {
+            console.error('Error loading research:', error);
+            set({ isLoading: false });
+        }
+    },
+
+    addResearch: async (research) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            const id = await perplexityService.createResearch(
+                user.uid,
+                research.prompt,
+                research.response,
+                research.topic
+            );
+            const newResearch = { ...research, id };
+            set((state) => ({
+                perplexityPrompts: [newResearch, ...state.perplexityPrompts],
+                isLoading: false
+            }));
+            return id;
+        } catch (error) {
+            console.error('Error adding research:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    getResearchByTopic: (topic: string) => {
+        const { perplexityPrompts } = get();
+        return perplexityPrompts
+            .filter(r => r.topic === topic)
+            .sort((a, b) => b.revisionId - a.revisionId);
+    },
+
+    // Topic Set Actions
+    topicSets: [],
+
+    addTopicSet: async (topicSet) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            // Check if seed already exists
+            const existing = get().topicSets.find(ts => ts.seed.toLowerCase() === topicSet.seed.toLowerCase());
+            if (existing) {
+                // Determine if we are adding new topics or replacing?
+                // For now, let's treat it as a replace/update of the existing seed's topics
+                // or we can append. The requirement says "manage individual topics".
+                // Simple implementation: Replace topics if seed exists, or merge unique ones.
+                const mergedTopics = Array.from(new Set([...existing.topics, ...topicSet.topics]));
+                await topicSetsService.update(user.uid, existing.id, { topics: mergedTopics, createdAt: Date.now() });
+
+                set(state => ({
+                    topicSets: state.topicSets.map(ts => ts.id === existing.id ? { ...ts, topics: mergedTopics, createdAt: Date.now() } : ts),
+                    isLoading: false
+                }));
+            } else {
+                const id = await topicSetsService.create(user.uid, topicSet);
+                const newSet = { ...topicSet, id };
+                set(state => ({
+                    topicSets: [newSet, ...state.topicSets],
+                    isLoading: false
+                }));
+            }
+        } catch (error) {
+            console.error('Error adding topic set:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    deleteTopicSet: async (id) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await topicSetsService.delete(user.uid, id);
+            set(state => ({
+                topicSets: state.topicSets.filter(ts => ts.id !== id),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error deleting topic set:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    importTopicSets: async (newTopicSets) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            // Process each imported set: if seed exists, merge; if new, create.
+            const promises = newTopicSets.map(async (ts) => {
+                const existing = get().topicSets.find(existing => existing.seed.toLowerCase() === ts.seed.toLowerCase());
+                if (existing) {
+                    const mergedTopics = Array.from(new Set([...existing.topics, ...ts.topics]));
+                    await topicSetsService.update(user.uid, existing.id, { topics: mergedTopics });
+                    return;
+                } else {
+                    // Remove ID from import if it conflicts, rely on firestore gen for new docs
+                    // But we might want to keep ID if we are doing a full restore.
+                    // Let's create new for safety to valid IDs.
+                    const { id, ...rest } = ts;
+                    await topicSetsService.create(user.uid, { ...rest, createdAt: Date.now() });
+                }
+            });
+
+            await Promise.all(promises);
+
+            // Reload all to sync state
+            const freshSets = await topicSetsService.getAll(user.uid);
+            set({ topicSets: freshSets, isLoading: false });
+
+        } catch (error) {
+            console.error('Error importing topic sets:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
     // Clear all data on logout
     clearData: () => set({
         user: null,
@@ -301,6 +457,8 @@ export const useStore = create<AppState>()((set, get) => ({
         media: [],
         settings: defaultSettings,
         articles: [],
+        perplexityPrompts: [],
+        topicSets: [],
         isLoading: false
     })
 }));

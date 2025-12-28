@@ -12,7 +12,7 @@ import {
     setDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { Post, MediaItem, Settings, Article } from '../types';
+import type { Post, MediaItem, Settings, Article, TopicSet } from '../types';
 
 // Helper to convert Firestore timestamp to number
 const timestampToNumber = (timestamp: any): number => {
@@ -163,5 +163,42 @@ export const articlesService = {
     async delete(userId: string, articleId: string): Promise<void> {
         const articleRef = doc(db, 'users', userId, 'articles', articleId);
         await deleteDoc(articleRef);
+    }
+};
+
+// Topic Sets Service
+export const topicSetsService = {
+    async getAll(userId: string): Promise<TopicSet[]> {
+        const topicsRef = collection(db, 'users', userId, 'topicSets');
+        const q = query(topicsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt)
+        } as TopicSet));
+    },
+
+    async create(userId: string, topicSet: Omit<TopicSet, 'id'>): Promise<string> {
+        const topicsRef = collection(db, 'users', userId, 'topicSets');
+        const docRef = await addDoc(topicsRef, {
+            ...topicSet,
+            createdAt: Timestamp.fromMillis(topicSet.createdAt)
+        });
+        return docRef.id;
+    },
+
+    async update(userId: string, id: string, updates: Partial<TopicSet>): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'topicSets', id);
+        const updateData: any = { ...updates };
+        if (updateData.createdAt) {
+            updateData.createdAt = Timestamp.fromMillis(updateData.createdAt);
+        }
+        await updateDoc(docRef, updateData);
+    },
+
+    async delete(userId: string, id: string): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'topicSets', id);
+        await deleteDoc(docRef);
     }
 };

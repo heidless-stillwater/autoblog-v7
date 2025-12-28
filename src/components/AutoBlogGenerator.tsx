@@ -1,30 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store';
-import { generateFullArticle } from '../services/aiService';
+import { generateWithResearch } from '../services/aiService';
 import { nanoid } from 'nanoid';
-import { Sparkles, Calendar, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
-import type { ArticleVersion, Article } from '../types';
+import { Sparkles, Calendar, CheckCircle, AlertTriangle, ArrowRight, Save as SaveIcon } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
+import ResearchSelector from './ResearchSelector';
+import type { ArticleVersion, Article, PerplexityPrompt } from '../types';
 
 interface AutoBlogGeneratorProps {
     onComplete: () => void;
+    initialTopic?: string;
 }
 
-const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
-    const { settings, addArticle } = useStore();
-    const [topic, setTopic] = useState('');
+const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps) => {
+    const { settings, addArticle, getResearchByTopic, addResearch } = useStore();
+    const [topic, setTopic] = useState(initialTopic || '');
     const [scheduleDate, setScheduleDate] = useState('');
-    const [status, setStatus] = useState<'idle' | 'generating' | 'review' | 'completed'>('idle');
+    const [status, setStatus] = useState<'idle' | 'research-check' | 'generating' | 'review' | 'completed'>('idle');
     const [progress, setProgress] = useState<string[]>([]);
     const [generatedContent, setGeneratedContent] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [existingResearch, setExistingResearch] = useState<PerplexityPrompt[]>([]);
+    const [selectedResearch, setSelectedResearch] = useState<PerplexityPrompt | null>(null);
+    const [researchId, setResearchId] = useState<string | null>(null);
 
     // Simulate progress steps
     useEffect(() => {
         if (status === 'generating') {
             const steps = [
                 'Initializing AI agent...',
-                'Analyzing topic trends...',
-                'Conducting Perplexity research...',
+                'Checking research cache...',
+                selectedResearch ? 'Using cached research...' : 'Conducting new Perplexity research...',
                 'Synthesizing insights...',
                 'Drafting content...',
                 'Optimizing for retention...',
@@ -39,17 +45,64 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
                 } else {
                     clearInterval(interval);
                 }
-            }, 1000); // Add a step every second
+            }, 1000);
 
             return () => clearInterval(interval);
         }
-    }, [status]);
+    }, [status, selectedResearch]);
 
-    const handleGenerate = async () => {
+    useEffect(() => {
+        if (initialTopic) {
+            setTopic(initialTopic);
+        }
+    }, [initialTopic]);
+
+    const handleCheckResearch = () => {
         if (!topic.trim()) return;
         if (!settings.perplexityApiKey) {
             setError('Missing Perplexity API Key. Please configure in Settings.');
             return;
+        }
+
+        // Check for existing research
+        const existing = getResearchByTopic(topic);
+
+        if (existing.length > 0) {
+            setExistingResearch(existing);
+            setStatus('research-check');
+        } else {
+            // No existing research, proceed to generate
+            handleGenerate(null);
+        }
+    };
+
+    const handleResearchSelection = (research: PerplexityPrompt | null) => {
+        setSelectedResearch(research);
+        setStatus('idle');
+        handleGenerate(research);
+    };
+
+    const handleGenerate = async (research: PerplexityPrompt | null) => {
+        if (!topic.trim()) return;
+        if (!settings.perplexityApiKey) {
+            setError('Missing Perplexity API Key. Please configure in Settings.');
+            return;
+        }
+
+        // Ask for permission before making API call (only if generating new research)
+        if (!research) {
+            const confirmed = confirm(
+                `Generate a 1000+ word article about "${topic}"?\n\n` +
+                `This will use your Perplexity API credits and may take 30-60 seconds.\n\n` +
+                `The AI will:\n` +
+                `• Conduct real-time research\n` +
+                `• Gather data and examples\n` +
+                `• Write a comprehensive article\n` +
+                `• Format with proper markdown\n\n` +
+                `Continue?`
+            );
+
+            if (!confirmed) return;
         }
 
         setStatus('generating');
@@ -57,7 +110,12 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
         setError(null);
 
         try {
-            const result = await generateFullArticle(topic, settings);
+            const cachedResearch = research ? {
+                prompt: research.prompt,
+                response: research.response
+            } : undefined;
+
+            const result = await generateWithResearch(topic, settings, cachedResearch);
 
             if (result.error) {
                 setError(result.error);
@@ -67,6 +125,21 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
 
             if (result.content) {
                 setGeneratedContent(result.content);
+
+                // Save research if it's new
+                if (!research && result.researchPrompt && result.researchResponse) {
+                    const newResearchId = await addResearch({
+                        prompt: result.researchPrompt,
+                        response: result.researchResponse,
+                        topic: topic,
+                        revisionId: 1, // Will be auto-calculated in service
+                        createdAt: Date.now()
+                    });
+                    setResearchId(newResearchId);
+                } else if (research) {
+                    setResearchId(research.id);
+                }
+
                 setStatus('review');
             }
         } catch (e) {
@@ -75,7 +148,7 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const articleId = nanoid();
         const versionId = nanoid();
         const now = Date.now();
@@ -83,9 +156,10 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
         const firstVersion: ArticleVersion = {
             id: versionId,
             content: generatedContent,
-            title: `Article about ${topic}`, // Basic title, user can edit later
+            title: `Article about ${topic}`,
             createdAt: now,
             generatedBy: 'ai',
+            researchId: researchId || undefined,
         };
 
         const newArticle: Article = {
@@ -99,12 +173,24 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
             updatedAt: now,
         };
 
-        addArticle(newArticle);
+        await addArticle(newArticle);
         setStatus('completed');
         setTimeout(() => {
             onComplete();
         }, 1500);
     };
+
+    // Research Selection Modal
+    if (status === 'research-check') {
+        return (
+            <ResearchSelector
+                topic={topic}
+                existingResearch={existingResearch}
+                onSelect={handleResearchSelection}
+                onCancel={() => setStatus('idle')}
+            />
+        );
+    }
 
     if (status === 'review') {
         return (
@@ -115,10 +201,8 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
                         Content Generated
                     </h2>
 
-                    <div className="prose prose-invert max-w-none h-[400px] overflow-y-auto bg-black/20 p-4 rounded-lg mb-6 border border-slate-800/50">
-                        <pre className="whitespace-pre-wrap font-mono text-sm text-slate-300">
-                            {generatedContent}
-                        </pre>
+                    <div className="h-[400px] overflow-y-auto bg-black/20 p-4 rounded-lg mb-6 border border-slate-800/50">
+                        <MarkdownRenderer content={generatedContent.trim()} />
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-4 items-end sm:items-center justify-between">
@@ -229,17 +313,18 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
                         <Sparkles size={16} />
                     </div>
                     <div>
-                        <p className="font-bold mb-1">AI Research Agent</p>
+                        <p className="font-bold mb-1">AI Research Agent with Caching</p>
                         <p className="opacity-80">
-                            I will conduct a live Perplexity research session, gather 1,000+ words of data-backed content,
-                            and format it with proper headers and markdown. This process takes about 30-60 seconds.
+                            I will check for existing research on this topic. If found, you can reuse it to save API credits.
+                            Otherwise, I'll conduct a live Perplexity research session, gather 1,000+ words of data-backed content,
+                            and format it with proper headers and markdown.
                         </p>
                     </div>
                 </div>
 
                 <div className="flex justify-end pt-4">
                     <button
-                        onClick={handleGenerate}
+                        onClick={handleCheckResearch}
                         disabled={!topic.trim()}
                         className="btn-primary flex items-center gap-2 px-6 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -252,9 +337,7 @@ const AutoBlogGenerator = ({ onComplete }: AutoBlogGeneratorProps) => {
     );
 };
 
-// Helper icon
-const SaveIcon = ({ className }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
-);
+// Helper icon removed as it's now imported from lucide-react
 
 export default AutoBlogGenerator;
+

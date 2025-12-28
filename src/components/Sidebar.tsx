@@ -7,7 +7,8 @@ import {
     Settings as SettingsIcon,
     PlusCircle,
     LogOut,
-    User
+    User,
+    Sparkles
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store';
@@ -21,6 +22,7 @@ const Sidebar = () => {
         { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
         { to: '/posts', icon: FileText, label: 'Posts' },
         { to: '/media', icon: ImageIcon, label: 'Media' },
+        { to: '/autoblog', icon: Sparkles, label: 'Autoblog' },
     ];
 
     const handleSignOut = async () => {

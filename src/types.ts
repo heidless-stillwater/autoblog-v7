@@ -24,7 +24,19 @@ export interface Settings {
     siteTitle: string;
     tagline: string;
     perplexityApiKey: string;
+    geminiApiKey: string;
+    perplexityModel: 'sonar' | 'sonar-reasoning' | 'sonar-deep-research';
     theme: 'light' | 'dark' | 'system';
+    customSeeds?: string[];
+}
+
+export interface PerplexityPrompt {
+    id: string;
+    prompt: string;
+    response: string;
+    revisionId: number;
+    createdAt: number;
+    topic: string;
 }
 
 export interface ArticleVersion {
@@ -33,6 +45,15 @@ export interface ArticleVersion {
     title: string;
     createdAt: number;
     generatedBy: 'ai' | 'user';
+    researchId?: string; // Link to PerplexityPrompt
+}
+
+export interface TopicSet {
+    id: string; // UUID
+    seed: string; // The seed prompt used
+    topics: string[]; // List of generated topics
+    createdAt: number;
+    generatedBy?: 'ai' | 'user';
 }
 
 export interface Article {
@@ -40,10 +61,12 @@ export interface Article {
     topic: string;
     status: 'draft' | 'scheduled' | 'published';
     scheduleDate?: number; // Timestamp
+    scheduleTime?: string; // HH:MM format
     currentVersionId: string;
     versions: ArticleVersion[];
     createdAt: number;
     updatedAt: number;
+    heroImage?: string; // Generated image URL
 }
 
 export interface User {
