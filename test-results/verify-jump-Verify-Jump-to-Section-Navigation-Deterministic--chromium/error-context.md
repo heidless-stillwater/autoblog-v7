@@ -1,0 +1,110 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "My Awesome Blog" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Just another WordPress clone
+    - generic [ref=e10]:
+      - img [ref=e12]
+      - generic [ref=e15]:
+        - paragraph [ref=e16]: Test User
+        - paragraph [ref=e17]: test@example.com
+    - navigation [ref=e18]:
+      - link "Dashboard" [ref=e19] [cursor=pointer]:
+        - /url: /
+        - img [ref=e20]
+        - generic [ref=e25]: Dashboard
+      - link "Posts" [ref=e26] [cursor=pointer]:
+        - /url: /posts
+        - img [ref=e27]
+        - generic [ref=e30]: Posts
+      - link "Media" [ref=e31] [cursor=pointer]:
+        - /url: /media
+        - img [ref=e32]
+        - generic [ref=e36]: Media
+      - link "autoBlog" [ref=e37] [cursor=pointer]:
+        - /url: /blog
+        - img [ref=e38]
+        - generic [ref=e41]: autoBlog
+      - link "New Post" [ref=e43] [cursor=pointer]:
+        - /url: /posts/new
+        - img [ref=e44]
+        - generic [ref=e46]: New Post
+    - generic [ref=e47]:
+      - button "Settings" [ref=e48] [cursor=pointer]:
+        - img [ref=e49]
+        - generic [ref=e52]: Settings
+      - button "Sign Out" [ref=e53] [cursor=pointer]:
+        - img [ref=e54]
+        - generic [ref=e57]: Sign Out
+  - main [ref=e58]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - heading "Blog" [level=1] [ref=e62]:
+          - img [ref=e64]
+          - text: Blog
+        - button "New Auto-Entry" [ref=e68] [cursor=pointer]:
+          - img [ref=e69]
+          - generic [ref=e70]: New Auto-Entry
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e74]:
+            - heading "Topic Generator" [level=3] [ref=e75]:
+              - img [ref=e76]
+              - text: Topic Generator
+            - generic [ref=e79]:
+              - generic [ref=e80]:
+                - generic [ref=e81]: Topic Seed
+                - textbox "e.g. Steampunk" [ref=e84]
+              - generic [ref=e85]:
+                - button "Generate" [disabled] [ref=e86]:
+                  - img [ref=e87]
+                  - text: Generate
+                - button "Refresh" [disabled] [ref=e89]:
+                  - img [ref=e90]
+                  - text: Refresh
+              - generic [ref=e95]:
+                - strong [ref=e96]: "Tip:"
+                - text: Choose a seed or enter your own, then click Generate to create topic ideas.
+                - generic [ref=e97]: Clicking a topic in the explorer also selects it as a seed.
+          - generic [ref=e99]:
+            - img [ref=e100]
+            - paragraph [ref=e102]: No topics generated yet.
+            - generic [ref=e104] [cursor=pointer]:
+              - img [ref=e105]
+              - text: Restore Backup
+        - generic [ref=e108]:
+          - generic [ref=e109]:
+            - button "Select All Articles" [ref=e110] [cursor=pointer]:
+              - img [ref=e111]
+              - generic [ref=e113]: Select All Articles
+            - generic [ref=e114]: 1 Article found
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - button [ref=e118] [cursor=pointer]:
+                - img [ref=e119]
+              - img [ref=e122]
+              - generic [ref=e125]:
+                - link "Test Navigation Article" [ref=e126] [cursor=pointer]:
+                  - /url: /blog/test-article-jump
+                  - heading "Test Navigation Article" [level=3] [ref=e127]
+                - generic [ref=e128]:
+                  - generic [ref=e129]:
+                    - img [ref=e130]
+                    - text: Generated Dec 28, 9:59 PM
+                  - generic [ref=e133]:
+                    - img [ref=e134]
+                    - text: 1 version
+                  - generic [ref=e138]: draft
+            - generic [ref=e139]:
+              - button "Edit & Preview" [ref=e140] [cursor=pointer]:
+                - img [ref=e141]
+                - text: Edit & Preview
+              - button "Publish" [ref=e144] [cursor=pointer]:
+                - img [ref=e145]
+                - text: Publish
+              - button "Delete" [ref=e148] [cursor=pointer]:
+                - img [ref=e149]
+```

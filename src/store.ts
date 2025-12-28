@@ -13,6 +13,7 @@ interface AppState {
     perplexityPrompts: PerplexityPrompt[];
     imagePrompts: ImagePrompt[];
     isLoading: boolean;
+    isInitialized: boolean;
 
     // User Actions
     setUser: (user: User | null) => void;
@@ -85,6 +86,7 @@ export const useStore = create<AppState>()((set, get) => ({
     perplexityPrompts: [],
     imagePrompts: [],
     isLoading: false,
+    isInitialized: false,
 
     // User Actions
     setUser: (user) => set({ user }),
@@ -92,6 +94,25 @@ export const useStore = create<AppState>()((set, get) => ({
     // Load all user data from Firestore
     loadUserData: async (userId: string) => {
         set({ isLoading: true });
+
+        // Check for injected test data
+        if (typeof window !== 'undefined' && (window as any).__TEST_DATA__) {
+            const testData = (window as any).__TEST_DATA__;
+            console.log('[Store] Loading injected test data:', testData);
+            set({
+                isLoading: false,
+                isInitialized: true,
+                posts: testData.posts || [],
+                media: testData.media || [],
+                settings: { ...defaultSettings, ...(testData.settings || {}) },
+                articles: testData.articles || [],
+                perplexityPrompts: testData.perplexityPrompts || [],
+                topicSets: testData.topicSets || [],
+                imagePrompts: testData.imagePrompts || []
+            });
+            return;
+        }
+
         try {
             const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts] = await Promise.all([
                 postsService.getAll(userId),
@@ -111,11 +132,12 @@ export const useStore = create<AppState>()((set, get) => ({
                 perplexityPrompts,
                 topicSets,
                 imagePrompts,
-                isLoading: false
+                isLoading: false,
+                isInitialized: true
             });
         } catch (error) {
             console.error('Error loading user data:', error);
-            set({ isLoading: false });
+            set({ isLoading: false, isInitialized: true });
         }
     },
 
@@ -609,6 +631,12 @@ export const useStore = create<AppState>()((set, get) => ({
         const { user } = get();
         if (!user) return;
 
+        // SKIP fetch if we are using injected test data (determinism)
+        if (typeof window !== 'undefined' && (window as any).__TEST_DATA__) {
+            console.log('[Store] Skipping loadImagePrompts due to injected test data');
+            return;
+        }
+
         set({ isLoading: true });
         try {
             const prompts = articleId
@@ -631,7 +659,8 @@ export const useStore = create<AppState>()((set, get) => ({
         perplexityPrompts: [],
         topicSets: [],
         imagePrompts: [],
-        isLoading: false
+        isLoading: false,
+        isInitialized: false
     })
 }));
 

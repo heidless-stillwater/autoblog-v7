@@ -77,6 +77,8 @@ export interface ImagePrompt {
     prompt: string;
     createdAt: number;
     updatedAt: number;
+    isPromptInserted?: boolean;
+    isImageInserted?: boolean;
 }
 
 export interface User {

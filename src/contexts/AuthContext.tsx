@@ -41,6 +41,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        // Dev Mode: Check for mock user
+        if (typeof window !== 'undefined' && (window as any).__MOCK_USER__) {
+            console.log('[Auth] Using Mock User for testing');
+            setUser((window as any).__MOCK_USER__);
+            setLoading(false);
+            return;
+        }
+
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
             if (firebaseUser) {
                 setUser({

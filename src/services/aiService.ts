@@ -12,7 +12,7 @@ export interface ResearchResponse {
     researchResponse?: string;
 }
 
-export const BLOG_STYLE_GUIDE = `=# 🎤 Blog Tone & Style Guide: “Entertain While You Educate”
+export const BLOG_STYLE_GUIDE = `# 🎤 Blog Tone & Style Guide: “Entertain While You Educate”
 
 ## 🎭 Voice & Personality
 You are a **witty, self-aware writer** who combines dad jokes, pop culture references, and playful sarcasm with surprisingly clear and insightful content. Think: cheeky uncle meets thoughtful mentor. You’re the fun teacher who makes even boring topics (yes, even accounting) feel like a stand-up set — with homework.
@@ -40,32 +40,66 @@ You are a **witty, self-aware writer** who combines dad jokes, pop culture refer
 To **entertain while educating** — and maybe, just maybe, help someone laugh *and* learn something. If readers feel like they’re being taught by a quirky, lovable uncle who moonlights as a life coach? Nailed it.
 
 ### 🛠 Technical Markdown Formatting (CRITICAL)
+- **Headers**: ALWAYS use standard Markdown hash syntax (e.g., \`# Title\`, \`## Subtitle\`). NEVER use text labels like "H1" or "H2".
 - **Tables**: ALWAYS use standard GFM table format. Ensure there is a blank line immediately before and after every table.
 - **Table Structure**: Each table must have a header row and a separator row (e.g., | --- | --- |). Do not include leading spaces before the pipe character.
-- **Spacing**: Add a newline after every paragraph. Do not include intros or outros. Output only the content.`;
+- **Spacing**: Add a newline after every paragraph. Do not include intros or outros. Output only the Markdown content (no conversational filler).`;
+
+export const ARTICLE_GUIDELINES = `
+    ## 🧠 Writing Guidelines
+    Each blog article must:
+    - Begin with a **compelling introduction** that clearly explains the importance of the topic and hooks the reader in the first few lines.
+    - Maintain a **conversational, professional, and easy-to-follow tone** — avoid jargon and overly academic language.
+    - Include **real-world examples, case studies, statistics, or quotes**, with accurate source attribution.
+    - Be organized with:
+      - **Descriptive H2 and H3 headers** (Use standard Markdown \`#\`, \`##\`, \`###\`)
+      - **Short paragraphs and skimmable formatting**
+      - **Bullet points or numbered lists** where appropriate
+    - Use **sparingly placed emojis (1–3 max)** only if relevant to tone or clarity.
+    - Conclude with a **strong closing section** that:
+      - Recaps key takeaways
+      - Provides suggested next steps or further reading
+
+    ## ⚙️ Output Rules
+    - Output only the final blog article formatted in **Markdown** — do not include planning notes, commentary, intros, or explanations.
+    - Write the full article in **Markdown format**, with clear section headers (\`##\`, \`###\`, etc.).
+    - **Tabular Data**: Use clean, standard Markdown tables for any tabular information.
+    - **Spacing**: Add a newline after every paragraph.
+`;
 
 /**
  * Strips markdown code block wrappers if they exist (e.g. ```markdown ... ```)
  * This ensures ReactMarkdown renders the content itself rather than a code block.
  */
 const cleanMarkdown = (content: string): string => {
-    // 1. Remove markdown code block wrappers if they wrap the entire content
-    // Check for ```markdown ... ```
-    const markdownMatch = content.match(/^[\s\n]*```markdown\n([\s\S]*?)\n```[\s\n]*$/i);
-    if (markdownMatch) return markdownMatch[1].trim();
+    // 1. Robust markdown block match (ignores case, handles optional whitespace around content)
+    // Matches ```markdown [content] ```
+    const markdownMatch = content.match(/```markdown\s*([\s\S]*?)\s*```/i);
+    if (markdownMatch) {
+        // Return ONLY the captured content inside the block
+        return markdownMatch[1].trim();
+    }
 
-    // Check for generic ``` ... ```
-    const genericMatch = content.match(/^[\s\n]*```\n?([\s\S]*?)\n```[\s\n]*$/);
-    if (genericMatch) return genericMatch[1].trim();
+    // 2. Generic blocks: Try to find content inside generic code blocks ``` ... ```
+    const trimmed = content.trim();
+    if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
+        // Remove first line (closing fence) and last line (opening fence logic is complex, simplify)
+        // match ```[lang] \n [content] \n ```
+        const genericMatch = trimmed.match(/^```[a-z]*\s+([\s\S]*?)\s+```$/i);
+        if (genericMatch) return genericMatch[1].trim();
 
-    // 2. If it's not wrapped, just trim it
+        // Fallback for simple fence stripping if regex fails
+        const lines = trimmed.split('\n');
+        if (lines.length >= 2) {
+            return lines.slice(1, -1).join('\n').trim();
+        }
+    }
+
+    // 3. Fallback: just return the trimmed original
     let cleaned = content.trim();
 
-    // 3. Ensure tables have newlines before them and no leading spaces for GFM parsing
-    // Fix: text followed immediately by a table line
+    // 4. Ensure tables have newlines before them and no leading spaces for GFM parsing
     cleaned = cleaned.replace(/([^\n])\n\|/g, '$1\n\n|');
-
-    // Fix: leading spaces/tabs before a table line (breaks some parsers)
     cleaned = cleaned.replace(/^\s+\|/gm, '|');
 
     return cleaned;
@@ -127,35 +161,16 @@ export const generateFullArticle = async (topic: string, settings: Settings): Pr
     For every blog post you create:
     - **Start by conducting a real-time research session using the topic: "${topic}"** to gather the most recent, accurate, and relevant insights, data, and examples.
     - Tailor the content to the **knowledge level, interests, and needs of the target audience**.
-    - Ensure the article is **a minimum of 1,000 words** to provide depth and SEO value.
+    - Ensure the article is **a minimum of 2,000 words** to provide depth and SEO value.
 
-    Writing Guidelines:
-    Each blog article must:
-    - Begin with a **compelling introduction** that clearly explains the importance of the topic and hooks the reader in the first few lines.
-    - Maintain a **conversational, professional, and easy-to-follow tone** — avoid jargon and overly academic language.
-    - Include **real-world examples, case studies, statistics, or quotes**, with accurate source attribution (e.g., “according to [source]”).
-    - Be organized with:
-      - **Descriptive H2 and H3 headers**
-      - **Short paragraphs and skimmable formatting**
-      - **Bullet points or numbered lists** where appropriate
-    - Use **sparingly placed emojis (1–3 max)** only if relevant to tone or clarity.
-    - Conclude with a **strong closing section** that:
-      - Recaps key takeaways
-      - Provides suggested next steps or further reading
-      - Optionally includes links to tools, guides, or calls-to-action
-
-    Output Rules:
-    - Output only the **final blog article text** — do not include planning notes, commentary, or explanations.
-    - Write the full article in **Markdown format**, with clear section headers (##, ###, etc.).
-    - Ensure the blog post is **at least 1,000 words** long.
-    - **Tabular Data**: Use clean, standard Markdown tables for any tabular information.
-    - **Spacing**: Add a newline after every paragraph (except between rows of a table or list).
+    Writing Guidelines & Output Rules:
+    ${ARTICLE_GUIDELINES}
     
     Workflow Summary:
     1. Accept the user’s topic (e.g., “The ROI of warehouse automation”)
     2. Conduct a Perplexity-powered search to gather timely insights, examples, and supporting data
     3. Write a complete blog article using the structure and tone above
-    4. Output only the final article (no additional comments or context)
+    4. Output only the final **Markdown** article (no additional comments or context)
     `;
 
     try {
@@ -265,29 +280,10 @@ export const generateWithResearch = async (
     For every blog post you create:
     - Use the provided "Research Data" above to write the article about: "${topic}".
     - Tailor the content to the **knowledge level, interests, and needs of the target audience**.
-    - Ensure the article is **a minimum of 1,000 words** to provide depth and SEO value.
+    - Ensure the article is **a minimum of 2,000 words** to provide depth and SEO value.
 
-    Writing Guidelines:
-    Each blog article must:
-    - Begin with a **compelling introduction** that clearly explains the importance of the topic and hooks the reader in the first few lines.
-    - Maintain a **conversational, professional, and easy-to-follow tone** — avoid jargon and overly academic language.
-    - Include **real-world examples, case studies, statistics, or quotes**, with accurate source attribution (e.g., “according to [source]”).
-    - Be organized with:
-      - **Descriptive H2 and H3 headers**
-      - **Short paragraphs and skimmable formatting**
-      - **Bullet points or numbered lists** where appropriate
-    - Use **sparingly placed emojis (1–3 max)** only if relevant to tone or clarity.
-    - Conclude with a **strong closing section** that:
-      - Recaps key takeaways
-      - Provides suggested next steps or further reading
-      - Optionally includes links to tools, guides, or calls-to-action
-
-    Output Rules:
-    - Output only the **final blog article text** — do not include planning notes, commentary, or explanations.
-    - Write the full article in **Markdown format**, with clear section headers (##, ###, etc.).
-    - Ensure the blog post is **at least 1,000 words** long.
-    - **Tabular Data**: Use clean, standard Markdown tables for any tabular information.
-    - **Spacing**: Add a newline after every paragraph (except between rows of a table or list).
+    Writing Guidelines & Output Rules:
+    ${ARTICLE_GUIDELINES}
     `;
 
         const articleResult = await fetch('/api/perplexity/chat/completions', {
@@ -395,22 +391,22 @@ export const rewriteToStyle = async (content: string, settings: Settings): Promi
     }
 
     const prompt = `
-    Task: Rewrite the following blog article content to strictly adhere to the Blog Tone & Style Guide provided below.
+    Task: Rewrite the following blog article content to strictly adhere to the Blog Tone & Style Guide provided below, while ENHANCING the structure and formatting.
     
     Style Guide:
     ${BLOG_STYLE_GUIDE}
     
-    Original Content:
+    Writing & Formatting Rules:
+    ${ARTICLE_GUIDELINES}
+    
+    original Content:
     ${content}
     
-    Requirements:
-    - Maintain the original facts, structure, and headers.
-    - Transform the tone to be witty, conversational, and self-aware as per the guide.
-    - Include the dad jokes, pop culture references, and self-deprecating remarks requested.
-    - Ensure the educational value is preserved but delivered with the specific personality described.
-    - Output only the final rewritten markdown. No intros or outros.
-    - **Tabular Data**: Ensure all tabular info is converted to or maintained as clean Markdown tables.
-    - **Spacing**: Add a newline after every paragraph (except between rows of a table or list).
+    Instructions:
+    - REWRITE the content to match the "Voice & Personality" from the Style Guide.
+    - RESTRUCTURE the content to match the "Writing Guidelines" above (add H3s, lists, emojis if missing).
+    - Ensure all Output Rules are met (valid Markdown, no intro/outro).
+    - **CRITICAL**: Do NOT remove Markdown headers (#, ##, etc.). ENHANCE them.
     `;
 
     try {
@@ -582,59 +578,55 @@ export interface ImagePromptDraft {
 }
 
 /**
- * Generates image prompts for major blog sections
+ * Generates image prompts for major blog sections using Gemini
  */
 export const generateImagePrompts = async (content: string, settings: Settings): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
-    if (!settings.perplexityApiKey) {
-        return { prompts: [], error: 'Perplexity API Key is missing. Please add it in Settings.' };
+    if (!settings.geminiApiKey) {
+        return { prompts: [], error: 'Gemini API Key is missing. Please add it in Settings.' };
     }
 
     const promptText = `Analyze the following blog post and identify EXACTLY 8 major sections (including introduction, conclusion, and key subsections). 
 For each identified section, create a highly detailed, photorealistic image generation prompt for NanoBanana.
 
 Rules:
-1. Use the EXACT text of the section's header from the markdown as the "sectionTitle". If a section doesn't have a clear header (like the introduction), use the most representative phrase or "Introduction".
-2. The first prompt MUST relate to the introduction or the most representative "hero" hook of the post.
-3. Limit to exactly 8 sections/prompts. If the post has fewer than 8 sections, identify logical visual breaks within longer sections to reach 8.
-4. Each prompt should be a vivid description of a scene or concept related to that section, suitable for high-quality AI image generation.
-5. Output ONLY a JSON array of objects with keys: "sectionTitle" and "prompt".
+1. The VERY FIRST prompt must be a sophisticated, high-impact prompt for the **HERO IMAGE**. It should not be tied to a specific section but should instead encapsulate the **gestalt** (the overall mood, theme, and essence) of the entire article. Use "Hero Image" as the sectionTitle for this first entry.
+2. For the subsequent 7 entries, use the EXACT text of the section's header from the markdown as the "sectionTitle". If a section doesn't have a clear header, identify the most representative visual break.
+3. Limit to exactly 8 prompts total.
+4. Each prompt should be a vivid description of a scene or concept, suitable for high-quality AI image generation.
+5. Output ONLY a clean JSON array of objects with keys: "sectionTitle" and "prompt".
 
 Blog Post Content:
 ${content}
 `;
 
     try {
-        const response = await fetch('/api/perplexity/chat/completions', {
+        const response = await fetch(`/api/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${settings.perplexityApiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: settings.perplexityModel || 'sonar',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a creative assistant that specializes in visual storytelling and AI image prompts. You always output valid JSON.'
-                    },
-                    {
-                        role: 'user',
-                        content: promptText
-                    }
-                ],
-                max_tokens: 2048,
+                contents: [{
+                    parts: [{
+                        text: promptText
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 2048,
+                }
             })
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            return { prompts: [], error: errorData.error?.message || `API Error: ${response.statusText}` };
+            return { prompts: [], error: errorData.error?.message || `Gemini API Error: ${response.statusText}` };
         }
 
         const data = await response.json();
-        let contentStr = data.choices[0].message.content;
+        let contentStr = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        // Sometimes LLMs wrap JSON in code blocks despite being asked not to
+        // Clean markdown code blocks
         if (contentStr.includes('```json')) {
             contentStr = contentStr.split('```json')[1].split('```')[0].trim();
         } else if (contentStr.includes('```')) {
@@ -643,11 +635,10 @@ ${content}
 
         try {
             const parsed = JSON.parse(contentStr);
-            // Handle both { "prompts": [...] } and directly [...]
             const prompts = Array.isArray(parsed) ? parsed : (parsed.prompts || []);
             return { prompts: prompts.slice(0, 8) };
         } catch (parseError) {
-            console.error('Failed to parse AI response as JSON:', contentStr);
+            console.error('Failed to parse Gemini response as JSON:', contentStr);
             return { prompts: [], error: 'Failed to parse AI response. The model may have returned malformed data.' };
         }
     } catch (error) {

@@ -92,7 +92,7 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
         // Ask for permission before making API call (only if generating new research)
         if (!research) {
             const confirmed = confirm(
-                `Generate a 1000+ word article about "${topic}"?\n\n` +
+                `Generate a 2,000+ word article about "${topic}"?\n\n` +
                 `This will use your Perplexity API credits and may take 30-60 seconds.\n\n` +
                 `The AI will:\n` +
                 `• Conduct real-time research\n` +
@@ -316,7 +316,7 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
                         <p className="font-bold mb-1">AI Research Agent with Caching</p>
                         <p className="opacity-80">
                             I will check for existing research on this topic. If found, you can reuse it to save API credits.
-                            Otherwise, I'll conduct a live Perplexity research session, gather 1,000+ words of data-backed content,
+                            Otherwise, I'll conduct a live Perplexity research session, gather 2,000+ words of data-backed content,
                             and format it with proper headers and markdown.
                         </p>
                     </div>

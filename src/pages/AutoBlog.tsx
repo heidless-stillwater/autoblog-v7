@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { format } from 'date-fns';
 import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search, Image as ImageIcon } from 'lucide-react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, Navigate } from 'react-router-dom';
 import AutoBlogGenerator from '../components/AutoBlogGenerator';
 import ArticleEditor from '../components/ArticleEditor';
 import TopicSelector from '../components/TopicSelector';
@@ -11,7 +11,7 @@ import type { Article, ArticleVersion } from '../types';
 import { rewriteToStyle, optimizeForSEO } from '../services/aiService';
 
 const AutoBlog = () => {
-    const { articles, deleteArticle, addPost, syncHeroImages } = useStore();
+    const { articles, deleteArticle, addPost, syncHeroImages, isInitialized } = useStore();
     const navigate = useNavigate();
     const { id } = useParams();
     const [view, setView] = useState<'list' | 'create'>('list');
@@ -57,11 +57,20 @@ const AutoBlog = () => {
 
     // If ID is provided, show article editor
     if (id) {
-        const article = articles.find(a => a.id === id);
-        if (!article) {
-            navigate('/blog');
-            return null;
+        if (!isInitialized) {
+            return (
+                <div className="flex items-center justify-center min-h-[50vh]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500"></div>
+                </div>
+            );
         }
+
+        const article = articles.find(a => a.id === id);
+
+        if (!article) {
+            return <Navigate to="/blog" replace />;
+        }
+
         return <ArticleEditor key={article.id} article={article} />;
     }
 
@@ -434,6 +443,7 @@ const AutoBlog = () => {
                             {sortedArticles.map(article => (
                                 <div
                                     key={article.id}
+                                    data-testid="article-card"
                                     className={`bg-slate-900/50 border rounded-xl p-6 transition-all group relative overflow-hidden ${selectedIds.has(article.id)
                                         ? 'border-indigo-500 ring-1 ring-indigo-500/50'
                                         : 'border-slate-800 hover:border-slate-700'

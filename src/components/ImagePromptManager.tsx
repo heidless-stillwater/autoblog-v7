@@ -15,7 +15,10 @@ import {
     Download,
     Upload,
     CheckSquare,
-    Square
+    Square,
+    Check,
+    Star,
+    Target
 } from 'lucide-react';
 import { useStore } from '../store';
 import { generateImagePrompts, generateImage } from '../services/aiService';
@@ -29,9 +32,10 @@ interface ImagePromptManagerProps {
     topic: string;
     content: string;
     onUpdateContent: (newContent: string) => void;
+    onJumpToSection?: (sectionTitle: string) => void;
 }
 
-const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: ImagePromptManagerProps) => {
+const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJumpToSection }: ImagePromptManagerProps) => {
     const {
         imagePrompts,
         addImagePrompt,
@@ -39,7 +43,9 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
         deleteImagePrompt,
         loadImagePrompts,
         settings,
-        addMedia
+        addMedia,
+        articles,
+        updateArticle
     } = useStore();
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -48,7 +54,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
     const [error, setError] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+    const [isProcessing, setIsProcessing] = useState(false); // Used for batch actions
 
     // Form states
     const [newTitle, setNewTitle] = useState('');
@@ -62,7 +69,12 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
 
     const filteredPrompts = imagePrompts
         .filter(p => p.articleId === articleId)
-        .sort((a, b) => b.createdAt - a.createdAt);
+        .sort((a, b) => {
+            // Requirement: Hero/Intro first, others in order.
+            // Since AI returns them in order, we should probably rely on a 'position' or just createdAt if added sequentially.
+            // For now, let's assume they are added in order.
+            return a.createdAt - b.createdAt;
+        });
 
     const handleGenerate = async () => {
         if (filteredPrompts.length > 0) {
@@ -78,18 +90,20 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
         setIsGenerating(true);
         setError(null);
         try {
-            const { prompts, error: aiError } = await generateImagePrompts(content, settings);
+            const { prompts: aiPrompts, error: aiError } = await generateImagePrompts(content, settings);
             if (aiError) {
                 setError(aiError);
             } else {
-                for (const draft of prompts) {
+                // Add prompts sequentially to maintain order via createdAt
+                for (let i = 0; i < aiPrompts.length; i++) {
+                    const draft = aiPrompts[i];
                     await addImagePrompt({
                         articleId,
-                        topic, // Store the topic as requested
+                        topic,
                         sectionTitle: draft.sectionTitle,
                         prompt: draft.prompt,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now()
+                        createdAt: Date.now() + i, // Offset to ensure predictable order
+                        updatedAt: Date.now() + i
                     });
                 }
             }
@@ -106,7 +120,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
         try {
             await addImagePrompt({
                 articleId,
-                topic, // Pass the current topic
+                topic,
                 sectionTitle: newTitle,
                 prompt: newPrompt,
                 createdAt: Date.now(),
@@ -183,40 +197,73 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
         }
     };
 
-    const escapeRegExp = (string: string) => {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const findHeaderIndex = (sectionTitle: string, articleContent: string): number => {
+        const escapeRegExp = (string: string) => {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        };
+
+        const lowerTitle = sectionTitle.toLowerCase();
+
+        // Specific Hero Image handling: should go at the very top (gestalt)
+        if (lowerTitle === 'hero image' || lowerTitle === 'hero') return 0;
+
+        const escapedTitle = escapeRegExp(sectionTitle);
+
+        // 1. Try exact header match (case insensitive)
+        const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
+        const exactMatch = articleContent.match(exactRegex);
+        if (exactMatch && exactMatch.index !== undefined) return exactMatch.index;
+
+        // 2. Try partial header match (header contains title)
+        const partialRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
+        const partialMatch = articleContent.match(partialRegex);
+        if (partialMatch && partialMatch.index !== undefined) return partialMatch.index;
+
+        // 3. Fuzzy match: sanitize both and check inclusion
+        const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sanitizedTitle = sanitize(sectionTitle);
+
+        const lines = articleContent.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('#')) {
+                const sanitizedLine = sanitize(line.replace(/^#+\s+/, ''));
+                if (sanitizedLine.includes(sanitizedTitle) || sanitizedTitle.includes(sanitizedLine)) {
+                    // Find the index of this line in the original content
+                    let currentPos = 0;
+                    for (let j = 0; j < i; j++) {
+                        currentPos += lines[j].length + 1; // +1 for newline
+                    }
+                    return currentPos;
+                }
+            }
+        }
+
+        return -1;
     };
 
-    const insertPromptAsQuote = (prompt: ImagePrompt) => {
-        // Safe escape for regex
-        const escapedTitle = escapeRegExp(prompt.sectionTitle);
-        // Match any header level (#, ##, ###, etc.) that contains the section title
-        const headerRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
-        const match = content.match(headerRegex);
-
-        let newContent = content;
+    const insertPromptAsQuote = async (prompt: ImagePrompt) => {
+        const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
         const quote = `\n> **AI Image Prompt:** ${prompt.prompt}\n\n`;
 
-        // Special case for Introduction
         const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') ||
             prompt.sectionTitle.toLowerCase() === 'intro';
 
-        if (match && match.index !== undefined) {
-            // Insert before the header
-            newContent = content.slice(0, match.index) + quote + content.slice(match.index);
+        let newContent = content;
+        if (headerIndex !== -1) {
+            newContent = content.slice(0, headerIndex) + quote + content.slice(headerIndex);
         } else if (isIntro) {
-            // If it's an intro and no header found, insert at the very top
             newContent = quote + content;
         } else {
-            // If not found, append to end
             newContent = content + quote;
         }
 
         onUpdateContent(newContent);
+        await updateImagePrompt(prompt.id, { isPromptInserted: true });
     };
 
     const generateAndInsertImage = async (prompt: ImagePrompt) => {
-        setIsProcessing(true);
+        setProcessingIds(prev => new Set(prev).add(prompt.id));
         setError(null);
         try {
             const result = await generateImage(prompt.prompt, settings);
@@ -239,32 +286,43 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
                     size: Math.round((compressedUrl.length * 3) / 4)
                 });
 
+                // Check for Hero Fallback
+                const article = articles.find(a => a.id === articleId);
+                const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+
+                if (!hasHero) {
+                    await updateArticle(articleId, { heroImage: compressedUrl });
+                }
+
                 // Insert into Markdown
-                const escapedTitle = escapeRegExp(prompt.sectionTitle);
-                const headerRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
-                const match = content.match(headerRegex);
+                const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
 
-                let newContent = content;
                 const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') ||
                     prompt.sectionTitle.toLowerCase() === 'intro';
 
-                if (match && match.index !== undefined) {
-                    newContent = content.slice(0, match.index) + imageMarkdown + content.slice(match.index);
+                let newContent = content;
+                if (headerIndex !== -1) {
+                    newContent = content.slice(0, headerIndex) + imageMarkdown + content.slice(headerIndex);
                 } else if (isIntro) {
-                    // Insert at top for intro if no header match
                     newContent = imageMarkdown + content;
                 } else {
                     newContent = content + imageMarkdown;
                 }
+
                 onUpdateContent(newContent);
+                await updateImagePrompt(prompt.id, { isImageInserted: true });
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
             setError(`Failed to generate image with NanoBanana: ${msg}`);
             console.error(err);
         } finally {
-            setIsProcessing(false);
+            setProcessingIds(prev => {
+                const next = new Set(prev);
+                next.delete(prompt.id);
+                return next;
+            });
         }
     };
 
@@ -413,14 +471,16 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
                                     className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-lg flex items-center gap-2"
                                 >
                                     <Copy size={14} />
-                                    Insert Quotes
+                                    Insert Prompts
                                 </button>
                                 <button
                                     onClick={async () => {
+                                        setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
                                         for (const p of selected) {
                                             await generateAndInsertImage(p);
                                         }
+                                        setIsProcessing(false);
                                         setSelectedIds(new Set());
                                     }}
                                     disabled={isProcessing}
@@ -494,98 +554,135 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent }: Imag
                             </div>
                         )}
 
-                        {filteredPrompts.map((prompt) => (
-                            <div
-                                key={prompt.id}
-                                className={clsx(
-                                    "group relative p-4 rounded-xl border transition-all cursor-pointer",
-                                    editingId === prompt.id
-                                        ? "bg-indigo-500/5 border-indigo-500/30"
-                                        : selectedIds.has(prompt.id)
-                                            ? "bg-indigo-500/10 border-indigo-500/40 shadow-lg shadow-indigo-500/5"
-                                            : "bg-slate-800/30 border-slate-800 hover:border-slate-700"
-                                )}
-                                onClick={() => !editingId && toggleSelect(prompt.id)}
-                            >
-                                {editingId === prompt.id ? (
-                                    <div className="space-y-4" onClick={e => e.stopPropagation()}>
-                                        <div className="flex justify-between items-center">
-                                            <input
-                                                type="text"
-                                                value={editTitle}
-                                                onChange={(e) => setEditTitle(e.target.value)}
-                                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white w-full mr-4"
-                                            />
-                                            <div className="flex gap-2">
-                                                <button onClick={() => handleSaveEdit(prompt.id)} className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded">
-                                                    <Save size={18} />
-                                                </button>
-                                                <button onClick={() => setEditingId(null)} className="p-1 text-slate-400 hover:bg-slate-400/10 rounded">
-                                                    <X size={18} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <textarea
-                                            value={editPrompt}
-                                            onChange={(e) => setEditPrompt(e.target.value)}
-                                            rows={2}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300 resize-none"
-                                        />
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className={clsx(
-                                                    "p-1 rounded-md border transition-colors",
-                                                    selectedIds.has(prompt.id) ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-700"
-                                                )}>
-                                                    <CheckSquare size={14} />
+                        {filteredPrompts.map((prompt) => {
+                            const isSelected = selectedIds.has(prompt.id);
+                            const isProcessingPrompt = processingIds.has(prompt.id);
+                            const isHero = prompt.sectionTitle.toLowerCase() === 'hero image' ||
+                                prompt.sectionTitle.toLowerCase() === 'hero';
+
+                            return (
+                                <div
+                                    key={prompt.id}
+                                    className={clsx(
+                                        "group relative p-4 rounded-xl border transition-all cursor-pointer",
+                                        editingId === prompt.id
+                                            ? "bg-indigo-500/5 border-indigo-500/30 font-bold"
+                                            : isSelected
+                                                ? "bg-indigo-500/10 border-indigo-500/40 shadow-lg shadow-indigo-500/5"
+                                                : "bg-slate-800/30 border-slate-800 hover:border-slate-700",
+                                        isProcessingPrompt && "opacity-75"
+                                    )}
+                                    onClick={() => !editingId && toggleSelect(prompt.id)}
+                                >
+                                    {editingId === prompt.id ? (
+                                        <div className="space-y-4" onClick={e => e.stopPropagation()}>
+                                            <div className="flex justify-between items-center">
+                                                <input
+                                                    type="text"
+                                                    value={editTitle}
+                                                    onChange={(e) => setEditTitle(e.target.value)}
+                                                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white w-full mr-4"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleSaveEdit(prompt.id)} className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded">
+                                                        <Save size={18} />
+                                                    </button>
+                                                    <button onClick={() => setEditingId(null)} className="p-1 text-slate-400 hover:bg-slate-400/10 rounded">
+                                                        <X size={18} />
+                                                    </button>
                                                 </div>
-                                                <h4 className="text-sm font-semibold text-slate-200">{prompt.sectionTitle}</h4>
                                             </div>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                <button
-                                                    onClick={() => handleStartEdit(prompt)}
-                                                    className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded transition-colors"
-                                                    title="Edit"
-                                                >
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => insertPromptAsQuote(prompt)}
-                                                    className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-colors"
-                                                    title="Insert as Quote"
-                                                >
-                                                    <Copy size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => generateAndInsertImage(prompt)}
-                                                    className="p-1 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded transition-colors"
-                                                    title="Generate & Insert Image"
-                                                >
-                                                    <ImageIcon size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(prompt.id)}
-                                                    className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                                            <textarea
+                                                value={editPrompt}
+                                                onChange={(e) => setEditPrompt(e.target.value)}
+                                                rows={2}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300 resize-none"
+                                            />
                                         </div>
-                                        <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700 pl-3">
-                                            "{prompt.prompt}"
-                                        </p>
-                                    </>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={clsx(
+                                                        "p-1 rounded-md border transition-colors",
+                                                        isSelected ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-700"
+                                                    )}>
+                                                        <CheckSquare size={14} />
+                                                    </div>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                                            {prompt.sectionTitle}
+                                                            {isHero && (
+                                                                <span className="flex items-center gap-0.5 text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold uppercase tracking-wider">
+                                                                    <Star size={10} className="fill-current" /> Hero
+                                                                </span>
+                                                            )}
+                                                            {prompt.isPromptInserted && (
+                                                                <span className="flex items-center gap-0.5 text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 leading-none">
+                                                                    <Check size={10} /> Prompt
+                                                                </span>
+                                                            )}
+                                                            {prompt.isImageInserted && (
+                                                                <span className="flex items-center gap-0.5 text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 leading-none">
+                                                                    <Check size={10} /> Image
+                                                                </span>
+                                                            )}
+                                                        </h4>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={() => handleStartEdit(prompt)}
+                                                        className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded transition-colors"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => insertPromptAsQuote(prompt)}
+                                                        className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-colors"
+                                                        title="Insert as Prompt"
+                                                    >
+                                                        <Copy size={16} />
+                                                    </button>
+                                                    {onJumpToSection && (
+                                                        <button
+                                                            onClick={() => onJumpToSection(prompt.sectionTitle)}
+                                                            className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded transition-colors"
+                                                            title="Jump to Section"
+                                                        >
+                                                            <Target size={16} />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => generateAndInsertImage(prompt)}
+                                                        disabled={isProcessingPrompt}
+                                                        className="p-1 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded transition-colors disabled:opacity-50"
+                                                        title="Generate & Insert Image"
+                                                    >
+                                                        {isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(prompt.id)}
+                                                        className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700 pl-3">
+                                                "{prompt.prompt}"
+                                            </p>
+                                        </>
+                                    )}
+                                </div >
+                            );
+                        })}
+                    </div >
+                </div >
             )}
-        </div>
+        </div >
     );
 };
 

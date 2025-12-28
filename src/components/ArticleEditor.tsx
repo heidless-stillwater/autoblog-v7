@@ -58,7 +58,11 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         article.scheduleDate ? new Date(article.scheduleDate).toISOString().slice(0, 16) : ''
     );
 
-    const currentVersion = article.versions.find(v => v.id === currentVersionId);
+    const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
+
+    if (!currentVersion) {
+        return <div className="text-center py-12 text-slate-400">Version not found</div>;
+    }
     const sortedVersions = [...article.versions].sort((a, b) => b.createdAt - a.createdAt);
 
     // Local state for content to ensure smooth typing
@@ -68,16 +72,18 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
     // Helpers for block conversion
     const parseMarkdownToBlocks = (markdown: string): Block[] => {
-        const regex = /!\[([^\]]*)\]\(([^)]+)\)/gu;
+        // Updated regex to catch BOTH images and headers
+        // Headers must be at the start of a line
+        const regex = /(!\[[^\]]*\]\([^)]+\))|(^#+\s+.*$)/gm;
         let lastIndex = 0;
         const newBlocks: Block[] = [];
         let match;
 
         while ((match = regex.exec(markdown)) !== null) {
-            // Text block before the image
+            // Text block before the match
             if (match.index > lastIndex) {
                 const text = markdown.slice(lastIndex, match.index);
-                if (text.length > 0 || newBlocks.length === 0) {
+                if (text.trim().length > 0 || (newBlocks.length === 0 && text.length > 0)) {
                     newBlocks.push({
                         id: `text-${Math.random().toString(36).substr(2, 9)}`,
                         type: 'text',
@@ -85,23 +91,41 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                     });
                 }
             }
-            // Image block
-            newBlocks.push({
-                id: `img-${Math.random().toString(36).substr(2, 9)}`,
-                type: 'image',
-                alt: match[1],
-                url: match[2]
-            });
+
+            // Determine if it was an image or a header
+            const matchedText = match[0];
+            if (matchedText.startsWith('![')) {
+                // Image block
+                const imgMatch = /!\[([^\]]*)\]\(([^)]+)\)/.exec(matchedText);
+                if (imgMatch) {
+                    newBlocks.push({
+                        id: `img-${Math.random().toString(36).substr(2, 9)}`,
+                        type: 'image',
+                        alt: imgMatch[1],
+                        url: imgMatch[2]
+                    });
+                }
+            } else {
+                // Header - keep as text block but it starts here
+                newBlocks.push({
+                    id: `text-${Math.random().toString(36).substr(2, 9)}`,
+                    type: 'text',
+                    content: matchedText
+                });
+            }
             lastIndex = regex.lastIndex;
         }
 
         // Final text block
         if (lastIndex < markdown.length) {
-            newBlocks.push({
-                id: `text-${Math.random().toString(36).substr(2, 9)}`,
-                type: 'text',
-                content: markdown.slice(lastIndex)
-            });
+            const remaining = markdown.slice(lastIndex);
+            if (remaining.length > 0) {
+                newBlocks.push({
+                    id: `text-${Math.random().toString(36).substr(2, 9)}`,
+                    type: 'text',
+                    content: remaining
+                });
+            }
         }
 
         // Ensure at least one text block if empty
@@ -312,6 +336,65 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         }
     };
 
+    const handleJumpToSection = (sectionTitle: string) => {
+        const lowerTitle = sectionTitle.toLowerCase();
+        console.log(`[JumpToSection] Target: "${sectionTitle}"`);
+
+        let targetBlockId = '';
+
+        // Special case for Hero Image -> top of article
+        if (lowerTitle === 'hero image' || lowerTitle === 'hero') {
+            targetBlockId = blocks[0]?.id;
+        } else {
+            // Find the block that looks like this section header
+            const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const sanitizedTarget = sanitize(sectionTitle);
+
+            for (const block of blocks) {
+                if (block.type === 'text' && block.content) {
+                    const contentLead = block.content.trim().split('\n')[0];
+                    if (contentLead.startsWith('#')) {
+                        const sanitizedLead = sanitize(contentLead.replace(/^#+\s+/, ''));
+                        if (sanitizedLead.includes(sanitizedTarget) || sanitizedTarget.includes(sanitizedLead)) {
+                            targetBlockId = block.id;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log(`[JumpToSection] Target Block ID: ${targetBlockId}`);
+
+        // 3. Scroll to the block
+        if (targetBlockId) {
+            const element = document.querySelector(`[data-block-id="${targetBlockId}"]`);
+            if (element) {
+                console.log(`[JumpToSection] Found element, scrolling...`);
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Visual feedback: brief highlight
+                const htmlEl = element as HTMLElement;
+                const originalBg = htmlEl.style.backgroundColor;
+                const originalTransition = htmlEl.style.transition;
+
+                htmlEl.style.transition = 'background-color 0.5s ease';
+                htmlEl.style.backgroundColor = 'rgba(79, 70, 229, 0.2)';
+
+                setTimeout(() => {
+                    htmlEl.style.backgroundColor = originalBg;
+                    setTimeout(() => {
+                        htmlEl.style.transition = originalTransition;
+                    }, 500);
+                }, 2000);
+            } else {
+                console.warn(`[JumpToSection] Element with data-block-id="${targetBlockId}" not found in DOM`);
+            }
+        } else {
+            console.warn(`[JumpToSection] Could not find block for "${sectionTitle}"`);
+        }
+    };
+
     // Clean up timeout on unmount
     useEffect(() => {
         return () => {
@@ -483,7 +566,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                         </div>
                         <div className="space-y-4 min-h-[500px]">
                             {blocks.map((block, index) => (
-                                <div key={block.id} className="relative group">
+                                <div key={block.id} data-block-id={block.id} className="relative group rounded-lg transition-colors duration-500">
                                     {block.type === 'text' ? (
                                         <textarea
                                             value={block.content}
@@ -566,6 +649,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 topic={article.topic}
                 content={currentVersion?.content || ''}
                 onUpdateContent={handleUpdateContent}
+                onJumpToSection={handleJumpToSection}
             />
 
             {/* Version History */}
