@@ -68,7 +68,7 @@ export default function Signup() {
                             Create Account
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            Get started with AutoBlog today
+                            Get started today
                         </p>
                     </div>
 

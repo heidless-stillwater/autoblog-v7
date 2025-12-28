@@ -131,7 +131,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 status: 'draft',
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-                tags: ['autoblog', article.topic],
+                tags: ['blog', article.topic],
                 attachments: [],
             });
 
@@ -173,7 +173,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             <div className="flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur z-40 py-4 -mx-4 px-4 border-b border-slate-800/50">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => navigate('/autoblog')}
+                        onClick={() => navigate('/blog')}
                         className="p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
                     >
                         <ArrowLeft size={20} />

@@ -10,7 +10,7 @@ interface MarkdownRendererProps {
 const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) => {
     const components: Components = {
         table: ({ children }) => (
-            <div className="my-8 overflow-x-auto rounded-xl border border-slate-800 shadow-2xl">
+            <div className="not-prose my-8 overflow-x-auto rounded-xl border border-slate-800 shadow-2xl bg-slate-900/40">
                 <table className="w-full border-collapse text-sm text-left">
                     {children}
                 </table>

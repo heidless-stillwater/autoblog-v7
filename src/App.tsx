@@ -58,8 +58,8 @@ function AppContent() {
         <Route path="posts/new" element={<PostEditor />} />
         <Route path="posts/:id" element={<PostEditor />} />
         <Route path="media" element={<Media />} />
-        <Route path="autoblog" element={<AutoBlog />} />
-        <Route path="autoblog/:id" element={<AutoBlog />} />
+        <Route path="blog" element={<AutoBlog />} />
+        <Route path="blog/:id" element={<AutoBlog />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

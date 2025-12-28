@@ -57,7 +57,7 @@ export default function Login() {
                             Welcome Back
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400">
-                            Sign in to continue to AutoBlog
+                            Sign in to continue
                         </p>
                     </div>
 

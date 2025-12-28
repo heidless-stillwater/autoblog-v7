@@ -284,7 +284,7 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 animate-fade-in">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                 <Sparkles className="text-indigo-400" />
-                New Autoblog Entry
+                New Blog Entry
             </h2>
 
             {error && (

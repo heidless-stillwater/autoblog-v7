@@ -22,7 +22,7 @@ const Sidebar = () => {
         { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
         { to: '/posts', icon: FileText, label: 'Posts' },
         { to: '/media', icon: ImageIcon, label: 'Media' },
-        { to: '/autoblog', icon: Sparkles, label: 'Autoblog' },
+        { to: '/blog', icon: Sparkles, label: 'autoBlog' },
     ];
 
     const handleSignOut = async () => {

@@ -37,14 +37,12 @@ You are a **witty, self-aware writer** who combines dad jokes, pop culture refer
   “Here’s the boring part. Just kidding — it’s actually kinda cool. Or maybe I’ve been doing this too long.”
 
 ## ✨ Your Mission
-To **entertain while educating** — and maybe, just maybe, help someone laugh *and* learn something. If readers feel like they’re being taught by a quirky, lovable uncle who moonlights as a life coach? Nailed it. 
+To **entertain while educating** — and maybe, just maybe, help someone laugh *and* learn something. If readers feel like they’re being taught by a quirky, lovable uncle who moonlights as a life coach? Nailed it.
 
-### 🛠 Formatting Rules
-- **Markdown Tables**: Always use standard Markdown table format for tabular data (e.g., | Header | Header |).
-- **Table Spacing**: ALWAYS add a blank line BEFORE and AFTER every Markdown table.
-- **Contiguous Tables**: Ensure no extra empty lines between table rows or between the header/separator and the data.
-- **Spacing**: Add a newline after every paragraph, BUT do not add newlines between rows of a table or list.
-- **No Intros/Outros**: Output ONLY the final content.`;
+### 🛠 Technical Markdown Formatting (CRITICAL)
+- **Tables**: ALWAYS use standard GFM table format. Ensure there is a blank line immediately before and after every table.
+- **Table Structure**: Each table must have a header row and a separator row (e.g., | --- | --- |). Do not include leading spaces before the pipe character.
+- **Spacing**: Add a newline after every paragraph. Do not include intros or outros. Output only the content.`;
 
 /**
  * Strips markdown code block wrappers if they exist (e.g. ```markdown ... ```)
@@ -63,9 +61,12 @@ const cleanMarkdown = (content: string): string => {
     // 2. If it's not wrapped, just trim it
     let cleaned = content.trim();
 
-    // 3. Ensure tables have newlines before them if they are preceded by text
-    // This is a common issue with GFM parsing
+    // 3. Ensure tables have newlines before them and no leading spaces for GFM parsing
+    // Fix: text followed immediately by a table line
     cleaned = cleaned.replace(/([^\n])\n\|/g, '$1\n\n|');
+
+    // Fix: leading spaces/tabs before a table line (breaks some parsers)
+    cleaned = cleaned.replace(/^\s+\|/gm, '|');
 
     return cleaned;
 };
@@ -97,7 +98,7 @@ export const generatePostContent = async (topic: string, settings: Settings): Pr
                         content: `Write a blog post about: ${topic}`
                     }
                 ],
-                max_tokens: 3000,
+                max_tokens: 4000, // Increased for longer articles
             })
         });
 
@@ -431,7 +432,132 @@ export const rewriteToStyle = async (content: string, settings: Settings): Promi
                         content: prompt
                     }
                 ],
-                max_tokens: 4000,
+                max_tokens: 4096,
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return { content: '', error: errorData.error?.message || `API Error: ${response.statusText}` };
+        }
+
+        const data = await response.json();
+        return { content: cleanMarkdown(data.choices[0].message.content) };
+    } catch (error) {
+        return { content: '', error: error instanceof Error ? error.message : 'Unknown error occurred' };
+    }
+};
+
+/**
+ * Generates SEO keywords for a given content using Gemini
+ */
+export const generateSEOKeywords = async (content: string, settings: Settings): Promise<{ keywords: string[]; error?: string }> => {
+    if (!settings.geminiApiKey) {
+        return { keywords: [], error: 'Gemini API Key is missing. Please add it in Settings.' };
+    }
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `You are an SEO expert. Analyze the following blog content and generate exactly 10 highly relevant SEO keywords or short phrases. Output ONLY a clean JSON array of strings. Content: ${content.substring(0, 5000)}`
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 500,
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return { keywords: [], error: errorData.error?.message || `Gemini API Error: ${response.statusText}` };
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleanedText = text.replace(/```json|```/g, '').trim();
+
+        // Extract JSON array
+        const start = cleanedText.indexOf('[');
+        const end = cleanedText.lastIndexOf(']');
+        if (start !== -1 && end !== -1) {
+            const jsonStr = cleanedText.substring(start, end + 1);
+            const keywords = JSON.parse(jsonStr);
+            if (Array.isArray(keywords)) {
+                return { keywords };
+            }
+        }
+        return { keywords: [], error: 'Invalid response format from Gemini' };
+    } catch (error) {
+        return { keywords: [], error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+};
+
+/**
+ * Optimizes content for SEO based on keywords and style
+ */
+export const optimizeForSEO = async (content: string, keywords: string, style: string, settings: Settings): Promise<AIResponse> => {
+    if (!settings.perplexityApiKey) {
+        return { content: '', error: 'Perplexity API Key is missing. Please add it in Settings.' };
+    }
+
+    // Safety Check: Very long articles (approx > 10,000 chars) might hit output limits
+    if (content.length > 15000) {
+        console.warn("Large content detected. SEO optimization might be truncated due to AI token limits.");
+    }
+
+    const prompt = `You are an expert SEO copywriter. Your task is to rewrite the input text to match a specified **writing style** while optimizing it for the given **SEO keywords**.
+
+Your output should:
+- Retain the original meaning and intent.  
+- Follow the requested writing style (e.g., formal, casual, persuasive, punchy, friendly), changing the least amount possible
+- Naturally and effectively include the provided SEO keywords, without stuffing.  
+- Use proper grammar and smooth transitions.  
+- Be engaging and easy to read.  
+
+Return only the improved version of the text.  
+
+
+## ✅ Output Behavior
+
+- Rewritten in the defined style  
+- Keywords naturally embedded  
+- Clear, engaging copy
+
+Target Writing Style: ${style}
+Target SEO Keywords: ${keywords}
+
+Original Content:
+${content}
+`;
+
+    try {
+        const response = await fetch('/api/perplexity/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${settings.perplexityApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: settings.perplexityModel || 'sonar',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert SEO copywriter and editor.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 4096,
             })
         });
 

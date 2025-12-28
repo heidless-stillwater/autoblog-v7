@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { format } from 'date-fns';
-import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2 } from 'lucide-react';
+import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AutoBlogGenerator from '../components/AutoBlogGenerator';
 import ArticleEditor from '../components/ArticleEditor';
 import TopicSelector from '../components/TopicSelector';
+import SEOKeywordsModal from '../components/SEOKeywordsModal';
 import type { Article, ArticleVersion } from '../types';
-import { rewriteToStyle } from '../services/aiService';
+import { rewriteToStyle, optimizeForSEO } from '../services/aiService';
 
 const AutoBlog = () => {
     const { articles, deleteArticle, addPost } = useStore();
@@ -18,13 +19,47 @@ const AutoBlog = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [refreshProgress, setRefreshProgress] = useState<{ current: number; total: number } | null>(null);
+    const [smoothProgress, setSmoothProgress] = useState(0);
+    const [showSEOModal, setShowSEOModal] = useState(false);
     const { settings, addArticleVersion } = useStore();
+
+    // Effect for smooth, incremental progress simulation
+    useEffect(() => {
+        if (!isRefreshing || !refreshProgress) {
+            if (!isRefreshing) setSmoothProgress(0);
+            return;
+        }
+
+        // Catch up to baseline immediately if we fall behind (when current increments)
+        const baseline = (refreshProgress.current / refreshProgress.total) * 100;
+        if (smoothProgress < baseline) {
+            setSmoothProgress(baseline);
+        }
+
+        const interval = setInterval(() => {
+            setSmoothProgress(prev => {
+                const targetMilestone = ((refreshProgress.current + 1) / refreshProgress.total) * 100;
+                const baseline = (refreshProgress.current / refreshProgress.total) * 100;
+
+                // Allow simulated progress to crawl up to 90% of the way to the next milestone
+                const limit = baseline + (targetMilestone - baseline) * 0.9;
+
+                if (prev < limit) {
+                    // Small increment to make it look active
+                    return Math.min(prev + (Math.random() * 0.2), limit);
+                }
+                return prev;
+            });
+        }, 200);
+
+        return () => clearInterval(interval);
+    }, [isRefreshing, refreshProgress]);
 
     // If ID is provided, show article editor
     if (id) {
         const article = articles.find(a => a.id === id);
         if (!article) {
-            navigate('/autoblog');
+            navigate('/blog');
             return null;
         }
         return <ArticleEditor article={article} />;
@@ -44,7 +79,7 @@ const AutoBlog = () => {
                 status: 'draft',
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-                tags: ['autoblog', article.topic],
+                tags: ['blog', article.topic],
                 attachments: [],
             });
 
@@ -136,6 +171,67 @@ const AutoBlog = () => {
         }
     };
 
+    const handleOptimizeSelectedSEO = () => {
+        const hasSelected = articles.some(a => selectedIds.has(a.id));
+        if (!hasSelected) return;
+        setShowSEOModal(true);
+    };
+
+    const proceedWithSEOOptimization = async (keywordResults: { [articleId: string]: string[] }, style: string) => {
+        const targetArticles = articles.filter(a => selectedIds.has(a.id) && keywordResults[a.id]?.length > 0);
+
+        if (!targetArticles.length) {
+            alert('No articles with selected keywords found.');
+            setShowSEOModal(false);
+            return;
+        }
+
+        setShowSEOModal(false);
+        setIsRefreshing(true);
+        setRefreshProgress({ current: 0, total: targetArticles.length });
+        let successCount = 0;
+        let failCount = 0;
+
+        try {
+            for (let i = 0; i < targetArticles.length; i++) {
+                const article = targetArticles[i];
+                const keywords = keywordResults[article.id].join(', ');
+                const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
+
+                if (currentVersion) {
+                    try {
+                        const result = await optimizeForSEO(currentVersion.content, keywords, style, settings);
+                        if (result.error) throw new Error(result.error);
+
+                        const newVersion: ArticleVersion = {
+                            id: crypto.randomUUID(),
+                            title: currentVersion.title,
+                            content: result.content,
+                            createdAt: Date.now(),
+                            generatedBy: 'ai',
+                        };
+
+                        await addArticleVersion(article.id, newVersion);
+                        successCount++;
+                    } catch (err) {
+                        console.error(`Failed to SEO optimize article ${article.id}:`, err);
+                        failCount++;
+                    }
+                }
+
+                setRefreshProgress({ current: i + 1, total: targetArticles.length });
+            }
+            alert(`SEO optimization complete!\nUpdated: ${successCount}\nFailed: ${failCount}`);
+            setSelectedIds(new Set()); // Clear selection after refresh
+        } catch (error) {
+            console.error('SEO optimization failed:', error);
+            alert('An error occurred during the SEO optimization.');
+        } finally {
+            setIsRefreshing(false);
+            setRefreshProgress(null);
+        }
+    };
+
     return (
         <div className="space-y-8 pb-20">
             <div className="flex items-center justify-between">
@@ -143,21 +239,32 @@ const AutoBlog = () => {
                     <span className="bg-indigo-500/20 text-indigo-400 p-2 rounded-lg">
                         <FileText size={24} />
                     </span>
-                    Autoblog
+                    Blog
                 </h1>
 
                 {view === 'list' && (
                     <div className="flex items-center gap-3">
                         {articles.length > 0 && selectedIds.size > 0 && (
-                            <button
-                                onClick={handleRefreshSelectedStyles}
-                                disabled={isRefreshing}
-                                className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-indigo-500/20"
-                                title={`Rewrite ${selectedIds.size} selected articles using the new Style Guide`}
-                            >
-                                <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
-                                {isRefreshing ? 'Refreshing...' : `Refresh Refined Style (${selectedIds.size})`}
-                            </button>
+                            <>
+                                <button
+                                    onClick={handleOptimizeSelectedSEO}
+                                    disabled={isRefreshing}
+                                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                                    title={`Optimize ${selectedIds.size} selected articles for SEO`}
+                                >
+                                    <Search size={18} className={isRefreshing ? "animate-spin" : ""} />
+                                    {isRefreshing ? 'Optimizing...' : `SEO Optimize (${selectedIds.size})`}
+                                </button>
+                                <button
+                                    onClick={handleRefreshSelectedStyles}
+                                    disabled={isRefreshing}
+                                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-indigo-500/20"
+                                    title={`Rewrite ${selectedIds.size} selected articles using the new Style Guide`}
+                                >
+                                    <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
+                                    {isRefreshing ? 'Refreshing...' : `Refresh Style (${selectedIds.size})`}
+                                </button>
+                            </>
                         )}
                         <button
                             onClick={() => setView('create')}
@@ -178,6 +285,42 @@ const AutoBlog = () => {
                     </button>
                 )}
             </div>
+
+            {/* Sticky Progress Indicator */}
+            {refreshProgress && (
+                <div className="sticky top-4 z-40 bg-slate-900/95 backdrop-blur-md border border-indigo-500/40 rounded-xl p-6 shadow-[0_0_30px_rgba(79,70,229,0.15)] transition-all">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400 border border-indigo-500/20 shadow-inner">
+                                <RefreshCw size={24} className="animate-spin" />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-bold text-lg m-0">Processing Article Updates</h3>
+                                <p className="text-slate-400 text-sm m-0">Optimizing content performance...</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-indigo-400 font-mono font-black text-2xl tracking-tighter">
+                                {Math.round(smoothProgress)}%
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="w-full bg-slate-800/50 rounded-full h-3.5 mb-2 overflow-hidden p-0.5 border border-slate-700">
+                        <div
+                            className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-emerald-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                            style={{ width: `${smoothProgress}%` }}
+                        />
+                    </div>
+                    <div className="flex justify-between text-xs font-medium text-slate-500 mt-2 px-1">
+                        <span className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            Processing article {refreshProgress.current} of {refreshProgress.total}
+                        </span>
+                        <span className="text-slate-400">{refreshProgress.total - refreshProgress.current} items left</span>
+                    </div>
+                </div>
+            )}
 
             {view === 'create' ? (
                 <AutoBlogGenerator onComplete={() => setView('list')} initialTopic={selectedTopic} />
@@ -230,36 +373,6 @@ const AutoBlog = () => {
                         </div>
                     )}
 
-                    {/* Progress Indicator */}
-                    {refreshProgress && (
-                        <div className="bg-slate-900 border border-indigo-500/30 rounded-xl p-6 animate-in slide-in-from-top-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
-                                        <RefreshCw size={20} className="animate-spin" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-white font-bold">Refreshing Article Styles</h3>
-                                        <p className="text-slate-400 text-sm">Applying the new tone and style guide...</p>
-                                    </div>
-                                </div>
-                                <span className="text-indigo-400 font-mono font-bold">
-                                    {Math.round((refreshProgress.current / refreshProgress.total) * 100)}%
-                                </span>
-                            </div>
-
-                            <div className="w-full bg-slate-800 rounded-full h-3 mb-2 overflow-hidden">
-                                <div
-                                    className="bg-indigo-500 h-full transition-all duration-500 ease-out shadow-[0_0_15px_rgba(99,102,241,0.5)]"
-                                    style={{ width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between text-xs text-slate-500 mt-1">
-                                <span>Processing {refreshProgress.current} of {refreshProgress.total} articles</span>
-                                <span>{refreshProgress.total - refreshProgress.current} remaining</span>
-                            </div>
-                        </div>
-                    )}
 
                     {sortedArticles.length === 0 ? (
                         <div className="text-center py-20 bg-slate-900/30 border border-slate-800 rounded-xl border-dashed">
@@ -296,8 +409,8 @@ const AutoBlog = () => {
                                 <div
                                     key={article.id}
                                     className={`bg-slate-900/50 border rounded-xl p-6 transition-all group relative overflow-hidden ${selectedIds.has(article.id)
-                                            ? 'border-indigo-500 ring-1 ring-indigo-500/50'
-                                            : 'border-slate-800 hover:border-slate-700'
+                                        ? 'border-indigo-500 ring-1 ring-indigo-500/50'
+                                        : 'border-slate-800 hover:border-slate-700'
                                         }`}
                                 >
                                     {selectedIds.has(article.id) && (
@@ -348,7 +461,7 @@ const AutoBlog = () => {
 
                                         <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => navigate(`/autoblog/${article.id}`)}
+                                                onClick={() => navigate(`/blog/${article.id}`)}
                                                 className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded-lg text-sm border border-indigo-500/20 transition-colors flex items-center gap-2"
                                             >
                                                 <Edit size={14} />
@@ -375,6 +488,14 @@ const AutoBlog = () => {
                         </div>
                     )}
                 </div>
+            )}
+
+            {showSEOModal && (
+                <SEOKeywordsModal
+                    articles={articles.filter(a => selectedIds.has(a.id))}
+                    onConfirm={proceedWithSEOOptimization}
+                    onClose={() => setShowSEOModal(false)}
+                />
             )}
         </div>
     );
