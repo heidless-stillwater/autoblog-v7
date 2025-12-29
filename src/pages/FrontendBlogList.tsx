@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Clock, ArrowRight, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import type { PublicPost, Article, Post } from '../types';
+import type { PublicPost, Article } from '../types';
 
 const FrontendBlogList = () => {
     const { publicContent, loadPublicContent, toggleFavorite, isLoading } = useStore();

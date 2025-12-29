@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
-import type { PublicPost, Article, Post } from '../types';
+import type { PublicPost, Article } from '../types';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { format } from 'date-fns';
 import { Clock, ArrowLeft, Share2, Heart } from 'lucide-react';

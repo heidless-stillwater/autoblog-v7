@@ -2,7 +2,7 @@ import { useStore } from '../store';
 import { Link } from 'react-router-dom';
 import { Clock, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
-import type { Post, Article } from '../types';
+
 
 import { useScheduledPublisher } from '../hooks/useScheduledPublisher';
 
