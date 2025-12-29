@@ -20,10 +20,11 @@ const Sidebar = () => {
     const { user, signOut } = useAuth();
 
     const navItems = [
-        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/admin/posts', icon: FileText, label: 'Posts' },
-        { to: '/admin/media', icon: ImageIcon, label: 'Media' },
-        { to: '/admin/blog', icon: Sparkles, label: 'autoBlog' },
+        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
+        { to: '/admin/posts', icon: FileText, label: 'Posts', end: false },
+        { to: '/admin/media', icon: ImageIcon, label: 'Media', end: false },
+        { to: '/admin/articles', icon: FileText, label: 'Article Mgr', end: false },
+        { to: '/admin/topics', icon: Sparkles, label: 'Topic Mgr', end: false },
     ];
 
     const handleSignOut = async () => {
@@ -79,6 +80,7 @@ const Sidebar = () => {
                                 ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
                                 : 'text-slate-400 hover:text-indigo-300 hover:bg-slate-800/50'
                         )}
+                        end={item.end}
                     >
                         <item.icon size={20} />
                         <span className="font-medium">{item.label}</span>

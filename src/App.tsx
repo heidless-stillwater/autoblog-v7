@@ -9,7 +9,9 @@ import Dashboard from './pages/Dashboard';
 import PostList from './pages/PostList';
 import PostEditor from './pages/PostEditor';
 import Media from './pages/Media';
-import AutoBlog from './pages/AutoBlog';
+import ArticleManager from './pages/ArticleManager';
+import TopicManager from './pages/TopicManager';
+// import AutoBlog from './pages/AutoBlog'; // Deprecated
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 
@@ -71,8 +73,15 @@ function AppContent() {
         <Route path="posts/new" element={<PostEditor />} />
         <Route path="posts/:id" element={<PostEditor />} />
         <Route path="media" element={<Media />} />
-        <Route path="blog" element={<AutoBlog />} />
-        <Route path="blog/:id" element={<AutoBlog />} />
+
+        {/* Refactored AutoBlog Routes */}
+        <Route path="articles" element={<ArticleManager />} />
+        <Route path="articles/:id" element={<ArticleManager />} />
+        <Route path="topics" element={<TopicManager />} />
+
+        {/* Legacy Redirects */}
+        <Route path="blog" element={<Navigate to="/admin/articles" replace />} />
+        <Route path="blog/:id" element={<Navigate to="/admin/articles/:id" replace />} />
       </Route>
 
       {/* Redirects */}

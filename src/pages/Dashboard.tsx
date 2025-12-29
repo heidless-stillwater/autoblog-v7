@@ -56,7 +56,7 @@ const Dashboard = () => {
             createdAt: a.createdAt,
             excerpt: excerpt,
             heroImage: a.heroImage,
-            link: `/admin/blog/${a.id}`,
+            link: `/admin/articles/${a.id}`,
             tagLabel: 'AutoBlog'
         };
     });
@@ -142,8 +142,8 @@ const Dashboard = () => {
                         <Link to="/admin/posts/new" className="btn-primary inline-flex items-center gap-2">
                             New Post
                         </Link>
-                        <Link to="/admin/blog" className="btn-secondary inline-flex items-center gap-2">
-                            New Auto-Article
+                        <Link to="/admin/topics" className="btn-secondary inline-flex items-center gap-2">
+                            New Auto-Entry
                         </Link>
                     </div>
                 </div>
