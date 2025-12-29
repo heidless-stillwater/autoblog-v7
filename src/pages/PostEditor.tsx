@@ -34,7 +34,7 @@ const PostEditor = () => {
                 setTags(post.tags.join(', '));
                 setHeroImage(post.heroImage || '');
             } else {
-                navigate('/posts'); // Post not found
+                navigate('/admin/posts'); // Post not found
             }
         }
     }, [id, posts, navigate]);
@@ -65,7 +65,7 @@ const PostEditor = () => {
                 ...postData
             };
             addPost(newPost);
-            navigate(`/posts/${newPost.id}`, { replace: true });
+            navigate(`/admin/posts/${newPost.id}`, { replace: true });
         }
         setIsSaving(false);
     };
@@ -124,7 +124,7 @@ const PostEditor = () => {
             <div className="flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur z-40 py-4 -mx-4 px-4 border-b border-slate-800/50">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => navigate('/posts')}
+                        onClick={() => navigate('/admin/posts')}
                         className="p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition-colors"
                     >
                         <ArrowLeft size={20} />

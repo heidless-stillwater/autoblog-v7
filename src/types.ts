@@ -86,7 +86,10 @@ export interface User {
     email: string | null;
     displayName: string | null;
     photoURL: string | null;
+    favorites?: string[];
 }
+
+export type PublicPost = Post | Article;
 
 export interface AuthState {
     user: User | null;

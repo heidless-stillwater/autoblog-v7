@@ -254,3 +254,60 @@ export const imagePromptsService = {
         await deleteDoc(docRef);
     }
 };
+
+// Public Service (Cross-User Content)
+import { collectionGroup } from 'firebase/firestore';
+import type { PublicPost } from '../types';
+
+export const publicService = {
+    async getPublicContent(): Promise<PublicPost[]> {
+        const postsQuery = query(
+            collectionGroup(db, 'posts'),
+            where('status', '==', 'live'),
+            orderBy('createdAt', 'desc')
+        );
+
+        const articlesQuery = query(
+            collectionGroup(db, 'articles'),
+            where('status', '==', 'published'),
+            orderBy('createdAt', 'desc')
+        );
+
+        const [postsSnap, articlesSnap] = await Promise.all([
+            getDocs(postsQuery),
+            getDocs(articlesQuery)
+        ]);
+
+        const posts = postsSnap.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt)
+        } as Post));
+
+        const articles = articlesSnap.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            createdAt: timestampToNumber(doc.data().createdAt),
+            updatedAt: timestampToNumber(doc.data().updatedAt),
+            scheduleDate: doc.data().scheduleDate ? timestampToNumber(doc.data().scheduleDate) : undefined
+        } as Article));
+
+        const allContent = [...posts, ...articles].sort((a, b) => b.createdAt - a.createdAt);
+        return allContent;
+    }
+};
+
+// Users Service
+export const usersService = {
+    async updateFavorites(userId: string, favorites: string[]): Promise<void> {
+        const favoritesRef = doc(db, 'users', userId, 'data', 'favorites');
+        await setDoc(favoritesRef, { articleIds: favorites }, { merge: true });
+    },
+
+    async getFavorites(userId: string): Promise<string[]> {
+        const favoritesRef = doc(db, 'users', userId, 'data', 'favorites');
+        const snap = await getDoc(favoritesRef);
+        return snap.exists() ? snap.data().articleIds || [] : [];
+    }
+};

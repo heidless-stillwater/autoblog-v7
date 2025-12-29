@@ -460,7 +460,7 @@ const AutoBlog = () => {
                                                 )}
                                             </div>
                                             <div className="flex-1">
-                                                <Link to={`/blog/${article.id}`} className="block">
+                                                <Link to={`/admin/blog/${article.id}`} className="block">
                                                     <h3 className="text-lg font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">
                                                         {article.topic}
                                                     </h3>
@@ -480,7 +480,12 @@ const AutoBlog = () => {
                                                         <Layers size={12} />
                                                         {article.versions.length} version{article.versions.length !== 1 ? 's' : ''}
                                                     </span>
-                                                    <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300 uppercase tracking-wider">
+                                                    <span className={`px-2 py-0.5 rounded uppercase tracking-wider text-xs font-semibold border ${article.status === 'published'
+                                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                            : article.status === 'draft'
+                                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                                : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                                        }`}>
                                                         {article.status}
                                                     </span>
                                                 </div>
@@ -489,7 +494,7 @@ const AutoBlog = () => {
 
                                         <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => navigate(`/blog/${article.id}`)}
+                                                onClick={() => navigate(`/admin/blog/${article.id}`)}
                                                 className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded-lg text-sm border border-indigo-500/20 transition-colors flex items-center gap-2"
                                             >
                                                 <Edit size={14} />

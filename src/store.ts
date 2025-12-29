@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt } from './types';
-import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService } from './services/firestoreService';
+import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost } from './types';
+import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService } from './services/firestoreService';
 import { perplexityService } from './services/perplexityService';
 
 interface AppState {
@@ -15,11 +15,18 @@ interface AppState {
     isLoading: boolean;
     isInitialized: boolean;
 
+    // Public Content State
+    publicContent: PublicPost[];
+
     // User Actions
     setUser: (user: User | null) => void;
+    toggleFavorite: (postId: string) => Promise<void>;
 
     // Data Loading Actions
     loadUserData: (userId: string) => Promise<void>;
+    loadPublicContent: () => Promise<void>;
+
+    // -- REST OF INTERFACE --
 
     // Post Actions
     addPost: (post: Omit<Post, 'id'>) => Promise<void>;
@@ -374,6 +381,46 @@ export const useStore = create<AppState>()((set, get) => ({
         } catch (error) {
             console.error('Error updating article version:', error);
             throw error;
+        }
+    },
+
+    // Public Actions
+    publicContent: [] as PublicPost[],
+
+    loadPublicContent: async () => {
+        set({ isLoading: true });
+        try {
+            const publicContent = await publicService.getPublicContent();
+            set({ publicContent, isLoading: false });
+        } catch (error: any) {
+            console.error('Error loading public content:', error);
+            if (error?.message?.includes('requires an index') || error?.code === 'failed-precondition') {
+                console.error('MISSING FIRESTORE INDEX: Check console for the link to create the index.');
+            }
+            set({ isLoading: false });
+        }
+    },
+
+    toggleFavorite: async (postId: string) => {
+        const { user } = get();
+        if (!user) return; // Can't favorite if not logged in
+
+        // Optimistic update
+        const currentFavorites = user.favorites || [];
+        const isFavorited = currentFavorites.includes(postId);
+        const newFavorites = isFavorited
+            ? currentFavorites.filter(id => id !== postId)
+            : [...currentFavorites, postId];
+
+        const updatedUser = { ...user, favorites: newFavorites };
+        set({ user: updatedUser });
+
+        try {
+            await usersService.updateFavorites(user.uid, newFavorites);
+        } catch (error) {
+            console.error('Error updating favorites:', error);
+            // Revert on error
+            set({ user });
         }
     },
 

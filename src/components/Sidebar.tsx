@@ -8,7 +8,8 @@ import {
     PlusCircle,
     LogOut,
     User,
-    Sparkles
+    Sparkles,
+    ExternalLink
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store';
@@ -19,10 +20,10 @@ const Sidebar = () => {
     const { user, signOut } = useAuth();
 
     const navItems = [
-        { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/posts', icon: FileText, label: 'Posts' },
-        { to: '/media', icon: ImageIcon, label: 'Media' },
-        { to: '/blog', icon: Sparkles, label: 'autoBlog' },
+        { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/admin/posts', icon: FileText, label: 'Posts' },
+        { to: '/admin/media', icon: ImageIcon, label: 'Media' },
+        { to: '/admin/blog', icon: Sparkles, label: 'autoBlog' },
     ];
 
     const handleSignOut = async () => {
@@ -86,7 +87,7 @@ const Sidebar = () => {
 
                 <div className="pt-6 mt-6 border-t border-slate-800">
                     <NavLink
-                        to="/posts/new"
+                        to="/admin/posts/new"
                         className={({ isActive }) => clsx(
                             'flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 group',
                             isActive
@@ -98,6 +99,16 @@ const Sidebar = () => {
                         <span className="font-medium">New Post</span>
                     </NavLink>
                 </div>
+                <NavLink
+                    to="/"
+                    className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-all ${isActive
+                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                >
+                    <ExternalLink size={20} />
+                    <span className="font-medium">View Site</span>
+                </NavLink>
             </nav>
 
             <div className="p-4 border-t border-slate-800 space-y-2">

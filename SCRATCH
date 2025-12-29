@@ -1,0 +1,2 @@
+Error loading public content: FirebaseError: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/heidless-firebase/firestore/databases/autoblog-db-0/indexes?create_composite=ClZwcm9qZWN0cy9oZWlkbGVzcy1maXJlYmFzZS9kYXRhYmFzZXMvYXV0b2Jsb2ctZGItMC9jb2xsZWN0aW9uR3JvdXBzL2FydGljbGVzL2luZGV4ZXMvXxACGgoKBnN0YXR1cxABGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI
+overrideMethod @ installHook.js:1

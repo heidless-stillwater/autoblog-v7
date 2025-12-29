@@ -13,6 +13,10 @@ import AutoBlog from './pages/AutoBlog';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 
+import FrontendLayout from './components/FrontendLayout';
+import FrontendBlogList from './pages/FrontendBlogList';
+import FrontendArticleView from './pages/FrontendArticleView';
+
 function AppContent() {
   const { settings, loadUserData, setUser, clearData } = useStore();
   const { user } = useAuth();
@@ -43,10 +47,19 @@ function AppContent() {
 
   return (
     <Routes>
+      {/* Public Routes */}
+      <Route element={<FrontendLayout />}>
+        <Route path="/" element={<FrontendBlogList />} />
+        <Route path="/article/:id" element={<FrontendArticleView />} />
+      </Route>
+
+      {/* Auth Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+
+      {/* Admin Protected Routes */}
       <Route
-        path="/"
+        path="/admin"
         element={
           <ProtectedRoute>
             <Layout />
@@ -60,8 +73,10 @@ function AppContent() {
         <Route path="media" element={<Media />} />
         <Route path="blog" element={<AutoBlog />} />
         <Route path="blog/:id" element={<AutoBlog />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
+
+      {/* Redirects */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
