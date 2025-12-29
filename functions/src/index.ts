@@ -61,3 +61,54 @@ export const apiProxy = onRequest({ cors: true }, async (req, res) => {
         res.status(500).json({ error: "Internal Proxy Error", details: error instanceof Error ? error.message : String(error) });
     }
 });
+
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import * as admin from "firebase-admin";
+
+// Initialize admin app if not already initialized
+if (admin.apps.length === 0) {
+    admin.initializeApp();
+}
+
+export const checkScheduledArticles = onSchedule("every 1 minutes", async (event) => {
+    logger.info("Running scheduled article check...");
+    const now = Date.now();
+    const db = admin.firestore();
+
+    try {
+        // Query for articles that are scheduled and due
+        // Note: Collection Group queries require an index, ensuring we catch articles across all users if needed
+        // For now assuming a single tenancy or simple collection structure.
+        // If 'articles' are subcollections of users, collectionGroup is correct.
+        const snapshot = await db.collectionGroup('articles')
+            .where('status', '==', 'scheduled')
+            .where('scheduleDate', '<=', now)
+            .get();
+
+        if (snapshot.empty) {
+            logger.info("No scheduled articles found due for publication.");
+            return;
+        }
+
+        logger.info(`Found ${snapshot.size} articles to publish.`);
+
+        const batch = db.batch();
+        let count = 0;
+
+        snapshot.docs.forEach(doc => {
+            const articleRef = doc.ref;
+            batch.update(articleRef, {
+                status: 'published',
+                publishedAt: now,
+                updatedAt: now
+            });
+            count++;
+        });
+
+        await batch.commit();
+        logger.info(`Successfully published ${count} articles.`);
+
+    } catch (error) {
+        logger.error("Error executing scheduled publish:", error);
+    }
+});

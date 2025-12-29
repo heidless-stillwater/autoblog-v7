@@ -419,8 +419,15 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         );
     }
 
+    const setScheduleIn = (minutes: number) => {
+        const now = new Date();
+        const future = new Date(now.getTime() + minutes * 60000);
+        setScheduleDate(format(future, "yyyy-MM-dd'T'HH:mm"));
+    };
+
     return (
         <div className="max-w-6xl mx-auto space-y-6 pb-20">
+            {/* ... (Header code remains unchanged, but we are inside the component return) ... */}
             {/* Header */}
             <div className="flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur z-40 py-4 -mx-4 px-4 border-b border-slate-800/50">
                 <div className="flex items-center gap-4">
@@ -515,9 +522,27 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 </div>
 
                 <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-400 mb-2">
-                        Schedule Publication
-                    </label>
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm font-medium text-slate-400">
+                            Schedule Publication
+                        </label>
+                        <div className="flex gap-1">
+                            <button
+                                onClick={() => setScheduleIn(1)}
+                                className="text-[10px] bg-slate-800 hover:bg-indigo-500 hover:text-white px-2 py-0.5 rounded text-slate-400 transition-colors border border-slate-700 hover:border-indigo-500"
+                                title="Schedule 1 minute from now"
+                            >
+                                +1m
+                            </button>
+                            <button
+                                onClick={() => setScheduleIn(5)}
+                                className="text-[10px] bg-slate-800 hover:bg-indigo-500 hover:text-white px-2 py-0.5 rounded text-slate-400 transition-colors border border-slate-700 hover:border-indigo-500"
+                                title="Schedule 5 minutes from now"
+                            >
+                                +5m
+                            </button>
+                        </div>
+                    </div>
                     <div className="flex gap-2">
                         <div className="relative flex-1">
                             <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />

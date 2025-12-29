@@ -4,8 +4,13 @@ import { Clock, ArrowRight, FileText, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Post, Article } from '../types';
 
+import { useScheduledPublisher } from '../hooks/useScheduledPublisher';
+
 const Dashboard = () => {
     const { posts, articles, settings } = useStore();
+
+    // Enable client-side scheduled publishing (polls every 30s)
+    useScheduledPublisher();
 
     // Stats
     const totalPosts = posts.length;
@@ -108,8 +113,8 @@ const Dashboard = () => {
                             <div className="flex items-center gap-2 text-indigo-400 mb-2 font-medium">
                                 <span className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/30 text-xs">Latest {latestItem.type === 'post' ? 'Post' : 'Entry'}</span>
                                 <span className={`px-2 py-0.5 rounded text-xs uppercase font-semibold ${(latestItem.status === 'live' || latestItem.status === 'published')
-                                        ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
-                                        : 'bg-amber-500/20 border border-amber-500/30 text-amber-400'
+                                    ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                                    : 'bg-amber-500/20 border border-amber-500/30 text-amber-400'
                                     }`}>
                                     {latestItem.status}
                                 </span>
@@ -178,8 +183,8 @@ const Dashboard = () => {
                                                 {item.tagLabel}
                                             </span>
                                             <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${(item.status === 'live' || item.status === 'published')
-                                                    ? 'bg-emerald-500/10 text-emerald-400'
-                                                    : 'bg-amber-500/10 text-amber-400'
+                                                ? 'bg-emerald-500/10 text-emerald-400'
+                                                : 'bg-amber-500/10 text-amber-400'
                                                 }`}>
                                                 {item.status}
                                             </span>
