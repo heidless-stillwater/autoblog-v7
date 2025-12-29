@@ -11,7 +11,7 @@ import type { Article, ArticleVersion } from '../types';
 import { rewriteToStyle, optimizeForSEO } from '../services/aiService';
 
 const AutoBlog = () => {
-    const { articles, deleteArticle, addPost, syncHeroImages, isInitialized } = useStore();
+    const { articles, deleteArticle, syncHeroImages, isInitialized } = useStore();
     const navigate = useNavigate();
     const { id } = useParams();
     const [view, setView] = useState<'list' | 'create'>('list');
@@ -21,7 +21,7 @@ const AutoBlog = () => {
     const [refreshProgress, setRefreshProgress] = useState<{ current: number; total: number } | null>(null);
     const [smoothProgress, setSmoothProgress] = useState(0);
     const [showSEOModal, setShowSEOModal] = useState(false);
-    const { settings, addArticleVersion } = useStore();
+    const { settings, addArticleVersion, updateArticle } = useStore();
 
     // Effect for smooth, incremental progress simulation
     useEffect(() => {
@@ -76,27 +76,13 @@ const AutoBlog = () => {
 
     const sortedArticles = [...articles].sort((a, b) => b.createdAt - a.createdAt);
 
-    const handlePublish = async (article: Article) => {
-        // Convert Article to Post and publish
-        const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
-        if (!currentVersion) return;
-
+    const handleTogglePublish = async (article: Article) => {
         try {
-            await addPost({
-                title: currentVersion.title || `Article: ${article.topic}`,
-                content: currentVersion.content,
-                status: 'draft',
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                tags: ['blog', article.topic],
-                attachments: [],
-            });
-
-            alert('Article draft created in Posts! You can now edit and publish it.');
-            navigate('/posts');
+            const newStatus = article.status === 'published' ? 'draft' : 'published';
+            await updateArticle(article.id, { status: newStatus });
         } catch (error) {
-            console.error('Error publishing article:', error);
-            alert('Failed to publish article. Please try again.');
+            console.error('Error toggling publish status:', error);
+            alert('Failed to update article status. Please try again.');
         }
     };
 
@@ -510,11 +496,14 @@ const AutoBlog = () => {
                                                 Edit & Preview
                                             </button>
                                             <button
-                                                onClick={() => handlePublish(article)}
-                                                className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-lg text-sm border border-emerald-500/20 transition-colors flex items-center gap-2"
+                                                onClick={() => handleTogglePublish(article)}
+                                                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors flex items-center gap-2 ${article.status === 'published'
+                                                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/20'
+                                                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/20'
+                                                    }`}
                                             >
-                                                <Eye size={14} />
-                                                Publish
+                                                {article.status === 'published' ? <Eye size={14} className="text-amber-300" /> : <Eye size={14} />}
+                                                {article.status === 'published' ? 'Unpublish' : 'Publish'}
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(article.id)}

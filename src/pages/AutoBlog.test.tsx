@@ -40,10 +40,10 @@ describe('AutoBlog Component', () => {
             isInitialized: false,
             isLoading: false,
             deleteArticle: vi.fn(),
-            addPost: vi.fn(),
             syncHeroImages: vi.fn(),
             settings: {},
-            addArticleVersion: vi.fn()
+            addArticleVersion: vi.fn(),
+            updateArticle: vi.fn()
         });
 
         render(
@@ -139,6 +139,48 @@ describe('AutoBlog Component', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Blog List')).toBeInTheDocument();
+        });
+    });
+
+
+    it('toggles article status when publish button is clicked', async () => {
+        const mockArticle = {
+            id: '123',
+            topic: 'Test Topic',
+            status: 'draft',
+            createdAt: Date.now(),
+            versions: [{ id: 'v1', title: 'Title', content: 'Content' }],
+            currentVersionId: 'v1'
+        };
+        const updateArticleMock = vi.fn();
+
+        (useStore as any).mockReturnValue({
+            articles: [mockArticle],
+            isInitialized: true,
+            isLoading: false,
+            deleteArticle: vi.fn(),
+            syncHeroImages: vi.fn(),
+            settings: {},
+            addArticleVersion: vi.fn(),
+            updateArticle: updateArticleMock
+        });
+
+        render(
+            <MemoryRouter initialEntries={['/blog']}>
+                <Routes>
+                    <Route path="/blog" element={<AutoBlog />} />
+                </Routes>
+            </MemoryRouter>
+        );
+
+        // Find publish button and click it
+        const publishBtn = screen.getByText('Publish');
+        expect(publishBtn).toBeInTheDocument();
+
+        publishBtn.click(); // Using click() directly or fireEvent.click
+
+        await waitFor(() => {
+            expect(updateArticleMock).toHaveBeenCalledWith('123', { status: 'published' });
         });
     });
 });
