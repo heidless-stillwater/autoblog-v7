@@ -12,8 +12,8 @@ export interface ResearchResponse {
     researchResponse?: string;
 }
 
-const PERPLEXITY_API_URL = import.meta.env.DEV ? '/api/perplexity' : 'https://api.perplexity.ai';
-const GEMINI_API_URL = import.meta.env.DEV ? '/api/gemini' : 'https://generativelanguage.googleapis.com';
+const PERPLEXITY_API_URL = '/api/perplexity';
+const GEMINI_API_URL = '/api/gemini';
 
 export const BLOG_STYLE_GUIDE = `# 🎤 Blog Tone & Style Guide: “Entertain While You Educate”
 
