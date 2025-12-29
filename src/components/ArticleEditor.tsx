@@ -18,8 +18,9 @@ import {
 import ImagePromptManager from './ImagePromptManager';
 import { format } from 'date-fns';
 import ResearchSelector from './ResearchSelector';
-import type { Article, ArticleVersion, PerplexityPrompt } from '../types';
-import { Trash2, MoveUp, MoveDown } from 'lucide-react';
+import type { Article, ArticleVersion, PerplexityPrompt, MediaItem } from '../types';
+import { Trash2, MoveUp, MoveDown, Image as ImageIcon } from 'lucide-react';
+import MediaSelectorModal from './MediaSelectorModal';
 
 interface Block {
     id: string;
@@ -54,10 +55,14 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     const [showPreview, setShowPreview] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [showResearchSelector, setShowResearchSelector] = useState(false);
+    const [showMediaSelector, setShowMediaSelector] = useState(false);
     const [existingResearch, setExistingResearch] = useState<PerplexityPrompt[]>([]);
     const [scheduleDate, setScheduleDate] = useState(
         article.scheduleDate ? new Date(article.scheduleDate).toISOString().slice(0, 16) : ''
     );
+
+    // Track active text block and cursor position for media insertion
+    const activeBlockRef = useRef<{ id: string; start: number; end: number } | null>(null);
 
     const currentVersion = article.versions.find(v => v.id === article.currentVersionId);
 
@@ -396,6 +401,58 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         }
     };
 
+    const handleSelectionChange = (id: string, e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const target = e.currentTarget;
+        activeBlockRef.current = {
+            id,
+            start: target.selectionStart,
+            end: target.selectionEnd
+        };
+    };
+
+    const handleInsertMedia = (mediaItem: MediaItem) => {
+        setShowMediaSelector(false);
+
+        let targetBlockId = activeBlockRef.current?.id;
+        let insertIndex = activeBlockRef.current?.start || 0;
+
+        // If no active block, try to find the last text block or create one
+        if (!targetBlockId) {
+            const lastBlock = blocks[blocks.length - 1];
+            if (lastBlock && lastBlock.type === 'text') {
+                targetBlockId = lastBlock.id;
+                insertIndex = lastBlock.content?.length || 0;
+            } else {
+                // Determine logic if no suitable block found (e.g. append)
+                // For now, let's just append to the end of the document if we can't find a place
+                const newContent = localContent + `\n\n![${mediaItem.name}](${mediaItem.url})`;
+                handleUpdateContent(newContent);
+                return;
+            }
+        }
+
+        // Find the block
+        const blockIndex = blocks.findIndex(b => b.id === targetBlockId);
+        if (blockIndex === -1) return;
+
+        const block = blocks[blockIndex];
+        if (block.type !== 'text') return; // Should not happen based on logic above
+
+        const content = block.content || '';
+        const newBlockContent = content.slice(0, insertIndex) +
+            `\n![${mediaItem.name}](${mediaItem.url})\n` +
+            content.slice(insertIndex);
+
+        // Update the specific block first
+        const newBlocks = [...blocks];
+        newBlocks[blockIndex] = { ...block, content: newBlockContent };
+
+        // Serialize back to markdown which will trigger re-parsing in handleUpdateContent
+        // This is important because the inserted markdown needs to be split into its own Image block
+        const newMarkdown = serializeBlocksToMarkdown(newBlocks);
+        handleUpdateContent(newMarkdown);
+    };
+
     // Clean up timeout on unmount
     useEffect(() => {
         return () => {
@@ -415,6 +472,15 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 existingResearch={existingResearch}
                 onSelect={handleResearchSelection}
                 onCancel={() => setShowResearchSelector(false)}
+            />
+        );
+    }
+
+    if (showMediaSelector) {
+        return (
+            <MediaSelectorModal
+                onSelect={handleInsertMedia}
+                onClose={() => setShowMediaSelector(false)}
             />
         );
     }
@@ -475,6 +541,14 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                         title="Sync Hero Image from Content"
                     >
                         <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                    </button>
+                    <button
+                        onClick={() => setShowMediaSelector(true)}
+                        className="btn-secondary px-3 py-2 rounded-lg flex items-center gap-2"
+                        title="Insert Image"
+                    >
+                        <ImageIcon size={18} />
+                        <span className="hidden sm:inline">Insert Media</span>
                     </button>
                 </div>
             </div>
@@ -597,6 +671,9 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                                         <textarea
                                             value={block.content}
                                             onChange={(e) => updateBlockContent(block.id, e.target.value)}
+                                            onSelect={(e) => handleSelectionChange(block.id, e)}
+                                            onClick={(e) => handleSelectionChange(block.id, e)}
+                                            onKeyUp={(e) => handleSelectionChange(block.id, e)}
                                             placeholder="Continue writing..."
                                             className="w-full bg-transparent text-lg text-slate-300 placeholder-slate-700 outline-none resize-none font-mono leading-relaxed px-4 py-2 border-l-2 border-transparent focus:border-indigo-500/50 transition-colors"
                                             style={{ height: 'auto', minHeight: '60px' }}
