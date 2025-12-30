@@ -64,6 +64,7 @@ export const apiProxy = onRequest({ cors: true }, async (req, res) => {
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 // Initialize admin app if not already initialized
 if (admin.apps.length === 0) {
@@ -73,7 +74,7 @@ if (admin.apps.length === 0) {
 export const checkScheduledArticles = onSchedule("every 1 minutes", async (event) => {
     logger.info("Running scheduled article check...");
     const now = Date.now();
-    const db = admin.firestore();
+    const db = getFirestore('autoblog-db-0');
 
     try {
         // Query for articles that are scheduled and due
@@ -82,7 +83,7 @@ export const checkScheduledArticles = onSchedule("every 1 minutes", async (event
         // If 'articles' are subcollections of users, collectionGroup is correct.
         const snapshot = await db.collectionGroup('articles')
             .where('status', '==', 'scheduled')
-            .where('scheduleDate', '<=', now)
+            .where('scheduleDate', '<=', Timestamp.fromMillis(now))
             .get();
 
         if (snapshot.empty) {
@@ -110,5 +111,136 @@ export const checkScheduledArticles = onSchedule("every 1 minutes", async (event
 
     } catch (error) {
         logger.error("Error executing scheduled publish:", error);
+    }
+});
+
+/**
+ * Topic Queue Processing Job
+ * Checks for topicQueueSnapshots where genDate <= now AND status == 'pending'
+ */
+export const processQueue = onSchedule("every 1 minutes", async (event) => {
+    logger.info("Running Topic Queue processing check...");
+    const now = Date.now();
+    const db = getFirestore('autoblog-db-0');
+
+    try {
+        const snapshot = await db.collectionGroup('topicQueueSnapshots')
+            .where('status', '==', 'pending')
+            .where('genDate', '<=', Timestamp.fromMillis(now))
+            .get();
+
+        if (snapshot.empty) {
+            logger.info("No pending queues due for processing.");
+            return;
+        }
+
+        logger.info(`Found ${snapshot.size} queues to process.`);
+
+        for (const snapDoc of snapshot.docs) {
+            const data = snapDoc.data();
+            const queue = data.queue as string[] || [];
+            const userId = snapDoc.ref.path.split('/')[1]; // Get userId from path: users/{userId}/topicQueueSnapshots/{id}
+
+            logger.info(`Processing queue for user ${userId}: ${snapDoc.id}`);
+
+            // Update status to processing
+            await snapDoc.ref.update({
+                status: 'processing',
+                updatedAt: Timestamp.now()
+            });
+
+            // Process each topic
+            for (const topic of queue) {
+                const logRef = db.collection('users').doc(userId).collection('queueLogs').doc();
+                await logRef.set({
+                    topic,
+                    timestamp: Timestamp.now(),
+                    status: 'processing',
+                    snapshotId: snapDoc.id,
+                    type: 'background'
+                });
+
+                // Simulate processing time
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Mark topic as completed in logs
+                await logRef.update({
+                    status: 'completed',
+                    completedAt: Timestamp.now()
+                });
+            }
+
+            // Mark snapshot as completed
+            await snapDoc.ref.update({
+                status: 'completed',
+                processedAt: Timestamp.now(),
+                updatedAt: Timestamp.now()
+            });
+        }
+
+        logger.info(`Successfully processed ${snapshot.size} topic queues.`);
+
+    } catch (error) {
+        logger.error("Error executing processQueue job:", error);
+    }
+});
+
+/**
+ * Manual Trigger for Topic Queue Processing (for testing)
+ */
+export const forceProcessQueue = onRequest({ cors: true }, async (req, res) => {
+    logger.info("Manually triggering Topic Queue processing...");
+    const now = Date.now();
+    const db = getFirestore('autoblog-db-0');
+
+    try {
+        const snapshot = await db.collectionGroup('topicQueueSnapshots')
+            .where('status', '==', 'pending')
+            .where('genDate', '<=', Timestamp.fromMillis(now))
+            .get();
+
+        if (snapshot.empty) {
+            res.json({ success: true, message: "No pending queues due for processing.", count: 0 });
+            return;
+        }
+
+        // Use individual updates instead of batch to support log writes
+        for (const snapDoc of snapshot.docs) {
+            const data = snapDoc.data();
+            const queue = data.queue as string[] || [];
+            const userId = snapDoc.ref.path.split('/')[1];
+
+            await snapDoc.ref.update({
+                status: 'processing',
+                updatedAt: Timestamp.now()
+            });
+
+            for (const topic of queue) {
+                const logRef = db.collection('users').doc(userId).collection('queueLogs').doc();
+                await logRef.set({
+                    topic,
+                    timestamp: Timestamp.now(),
+                    status: 'processing',
+                    snapshotId: snapDoc.id,
+                    type: 'manual_force'
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                await logRef.update({ status: 'completed' });
+            }
+
+            await snapDoc.ref.update({
+                status: 'completed',
+                processedAt: Timestamp.now(),
+                updatedAt: Timestamp.now()
+            });
+        }
+
+        res.json({ success: true, message: `Successfully processed ${snapshot.size} topic queues.`, count: snapshot.size });
+
+    } catch (error) {
+        logger.error("Error in forceProcessQueue:", error);
+        res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
     }
 });

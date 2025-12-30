@@ -8,6 +8,9 @@ import TopicExplorer from './TopicExplorer';
 interface TopicSelectorProps {
     onSelectTopic: (topic: string) => void;
     selectedTopic?: string;
+    topicQueue?: string[];
+    onToggleTopic?: (topic: string) => void;
+    onBulkToggleTopic?: (topics: string[], shouldSelect: boolean) => void;
 }
 
 const PRESET_SEEDS = [
@@ -21,7 +24,13 @@ const PRESET_SEEDS = [
     'Dystopian Societies'
 ];
 
-const TopicSelector: React.FC<TopicSelectorProps> = ({ onSelectTopic, selectedTopic }) => {
+const TopicSelector: React.FC<TopicSelectorProps> = ({
+    onSelectTopic,
+    selectedTopic,
+    topicQueue,
+    onToggleTopic,
+    onBulkToggleTopic
+}) => {
     const { settings, addTopicSet, topicSets, updateSettings } = useStore();
     const [seed, setSeed] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -198,7 +207,13 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({ onSelectTopic, selectedTo
             </div>
 
             <div className="md:col-span-2">
-                <TopicExplorer onSelectTopic={handleTopicClick} selectedTopic={selectedTopic} />
+                <TopicExplorer
+                    onSelectTopic={handleTopicClick}
+                    selectedTopic={selectedTopic}
+                    topicQueue={topicQueue}
+                    onToggleTopic={onToggleTopic}
+                    onBulkToggleTopic={onBulkToggleTopic}
+                />
             </div>
         </div>
     );

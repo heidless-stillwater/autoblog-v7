@@ -13,7 +13,7 @@ interface AutoBlogGeneratorProps {
 }
 
 const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps) => {
-    const { settings, addArticle, getResearchByTopic, addResearch } = useStore();
+    const { settings, updateSettings, addArticle, getResearchByTopic, addResearch, addGenHistory, updateGenHistory, topicSets } = useStore();
     const [topic, setTopic] = useState(initialTopic || '');
     const [scheduleDate, setScheduleDate] = useState('');
     const [status, setStatus] = useState<'idle' | 'research-check' | 'generating' | 'review' | 'completed'>('idle');
@@ -23,6 +23,18 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
     const [existingResearch, setExistingResearch] = useState<PerplexityPrompt[]>([]);
     const [selectedResearch, setSelectedResearch] = useState<PerplexityPrompt | null>(null);
     const [researchId, setResearchId] = useState<string | null>(null);
+    const [historyId, setHistoryId] = useState<string | null>(null);
+
+    const addTimeOffset = (mins: number) => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() + mins);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        setScheduleDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+    };
 
     // Simulate progress steps
     useEffect(() => {
@@ -109,6 +121,23 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
         setProgress([]);
         setError(null);
 
+        // Add history record
+        const topicSet = topicSets.find(ts => ts.topics.includes(topic));
+        const topicSetName = topicSet ? topicSet.seed : 'Custom';
+
+        try {
+            const hId = await addGenHistory({
+                topicSetName,
+                topicName: topic,
+                topicState: 'processing',
+                processDateTime: Date.now(),
+                topicArticleURL: 'pending'
+            });
+            setHistoryId(hId);
+        } catch (e) {
+            console.error('Failed to create history record:', e);
+        }
+
         try {
             const cachedResearch = research ? {
                 prompt: research.prompt,
@@ -120,6 +149,12 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
             if (result.error) {
                 setError(result.error);
                 setStatus('idle');
+                if (historyId) {
+                    await updateGenHistory(historyId, {
+                        topicState: 'error',
+                        processDateTime: Date.now()
+                    });
+                }
                 return;
             }
 
@@ -143,8 +178,16 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
                 setStatus('review');
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Unknown error');
+            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+            setError(errorMessage);
             setStatus('idle');
+
+            if (historyId) {
+                await updateGenHistory(historyId, {
+                    topicState: 'error',
+                    processDateTime: Date.now()
+                });
+            }
         }
     };
 
@@ -174,6 +217,23 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
         };
 
         await addArticle(newArticle);
+
+        // Update history record
+        if (historyId) {
+            await updateGenHistory(historyId, {
+                topicState: 'completed',
+                processDateTime: Date.now(),
+                topicArticleURL: `/admin/articles/${articleId}`
+            });
+        }
+
+        // Remove from queue if it exists
+        const currentQueue = settings.topicQueue || [];
+        if (currentQueue.includes(topic)) {
+            const updatedQueue = currentQueue.filter(t => t !== topic);
+            await updateSettings({ topicQueue: updatedQueue });
+        }
+
         setStatus('completed');
         setTimeout(() => {
             onComplete();
@@ -208,14 +268,32 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
                     <div className="flex flex-col sm:flex-row gap-4 items-end sm:items-center justify-between">
                         <div className="space-y-2 w-full sm:w-auto">
                             <label className="block text-sm font-medium text-slate-400">Schedule Publication (Optional)</label>
-                            <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                                <input
-                                    type="datetime-local"
-                                    value={scheduleDate}
-                                    onChange={(e) => setScheduleDate(e.target.value)}
-                                    className="input-field pl-10 w-full sm:w-64"
-                                />
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                    <input
+                                        type="datetime-local"
+                                        value={scheduleDate}
+                                        onChange={(e) => setScheduleDate(e.target.value)}
+                                        className="input-field pl-10 w-full sm:w-64"
+                                    />
+                                </div>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => addTimeOffset(-1)}
+                                        className="text-[10px] font-black text-slate-500 hover:text-indigo-400 bg-slate-800 px-2 py-1 rounded border border-slate-700 transition-colors"
+                                        title="-1 Minute"
+                                    >
+                                        -1m
+                                    </button>
+                                    <button
+                                        onClick={() => addTimeOffset(-5)}
+                                        className="text-[10px] font-black text-slate-500 hover:text-indigo-400 bg-slate-800 px-2 py-1 rounded border border-slate-700 transition-colors"
+                                        title="-5 Minutes"
+                                    >
+                                        -5m
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

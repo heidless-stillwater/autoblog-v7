@@ -10,10 +10,14 @@ import {
     where,
     orderBy,
     Timestamp,
-    setDoc
+    setDoc,
+    limit,
+    onSnapshot,
+    QuerySnapshot,
+    type DocumentData
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import type { Post, MediaItem, Settings, Article, TopicSet, ImagePrompt } from '../types';
+import type { Post, MediaItem, Settings, Article, TopicSet, ImagePrompt, TopicQueueSnapshot, GenHistory } from '../types';
 
 // Helper to convert Firestore timestamp to number
 const timestampToNumber = (timestamp: any): number => {
@@ -255,6 +259,83 @@ export const imagePromptsService = {
     }
 };
 
+// Topic Queue Snapshots Service
+export const topicQueueService = {
+    async saveSnapshot(userId: string, queue: string[], customId: string = 'backup', genDate?: number): Promise<string> {
+        const timestamp = Date.now();
+        // Default genDate to 1 year from now if not provided
+        const finalGenDate = genDate || (timestamp + (365 * 24 * 60 * 60 * 1000));
+
+        // Sanitize customId to be safe for document IDs (alphanumeric and dashes/underscores)
+        const safeId = customId.replace(/[^a-zA-Z0-9-_]/g, '-');
+        const docId = `topicQueue-${safeId}-${timestamp}`;
+        const docRef = doc(db, 'users', userId, 'topicQueueSnapshots', docId);
+
+        await setDoc(docRef, {
+            queue,
+            createdAt: Timestamp.fromMillis(timestamp),
+            genDate: Timestamp.fromMillis(finalGenDate),
+            originalId: safeId,
+            status: 'pending'
+        });
+
+        return docId;
+    },
+
+    async getAllSnapshots(userId: string): Promise<TopicQueueSnapshot[]> {
+        const snapshotsRef = collection(db, 'users', userId, 'topicQueueSnapshots');
+        const q = query(snapshotsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                queue: data.queue || [],
+                createdAt: timestampToNumber(data.createdAt),
+                genDate: timestampToNumber(data.genDate),
+                status: data.status,
+                processedAt: data.processedAt ? timestampToNumber(data.processedAt) : undefined
+            };
+        });
+    },
+
+    async updateSnapshot(userId: string, snapshotId: string, queue: string[], genDate?: number): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'topicQueueSnapshots', snapshotId);
+        const updates: any = {
+            queue,
+            updatedAt: Timestamp.now(),
+            status: 'pending' // Reset to pending so it re-processes if date was changed
+        };
+        if (genDate) {
+            updates.genDate = Timestamp.fromMillis(genDate);
+        }
+        await updateDoc(docRef, updates);
+    },
+
+    async deleteSnapshot(userId: string, snapshotId: string): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'topicQueueSnapshots', snapshotId);
+        await deleteDoc(docRef);
+    },
+
+    subscribeToQueueLogs(userId: string, callback: (logs: any[]) => void): () => void {
+        const logsRef = collection(db, 'users', userId, 'queueLogs');
+        const q = query(logsRef, orderBy('timestamp', 'asc'), limit(50));
+
+        return onSnapshot(q, (snapshot: QuerySnapshot<DocumentData>) => {
+            const logs = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    timestamp: timestampToNumber(data.timestamp)
+                };
+            });
+            callback(logs);
+        });
+    }
+};
+
 // Public Service (Cross-User Content)
 import { collectionGroup } from 'firebase/firestore';
 import type { PublicPost } from '../types';
@@ -309,5 +390,56 @@ export const usersService = {
         const favoritesRef = doc(db, 'users', userId, 'data', 'favorites');
         const snap = await getDoc(favoritesRef);
         return snap.exists() ? snap.data().articleIds || [] : [];
+    }
+};
+
+// Generation History Service
+export const genHistoryService = {
+    async getAll(userId: string): Promise<GenHistory[]> {
+        const historyRef = collection(db, 'users', userId, 'genHistory');
+        const q = query(historyRef, orderBy('processDateTime', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            processDateTime: timestampToNumber(doc.data().processDateTime)
+        } as GenHistory));
+    },
+
+    async create(userId: string, record: Omit<GenHistory, 'id'>): Promise<string> {
+        const historyRef = collection(db, 'users', userId, 'genHistory');
+        const docRef = await addDoc(historyRef, {
+            ...record,
+            processDateTime: Timestamp.fromMillis(record.processDateTime)
+        });
+        return docRef.id;
+    },
+
+    async update(userId: string, id: string, updates: Partial<GenHistory>): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'genHistory', id);
+        const updateData: any = { ...updates };
+        if (updateData.processDateTime) {
+            updateData.processDateTime = Timestamp.fromMillis(updateData.processDateTime);
+        }
+        await updateDoc(docRef, updateData);
+    },
+
+    async delete(userId: string, id: string): Promise<void> {
+        const docRef = doc(db, 'users', userId, 'genHistory', id);
+        await deleteDoc(docRef);
+    },
+
+    subscribe(userId: string, callback: (history: GenHistory[]) => void): () => void {
+        const historyRef = collection(db, 'users', userId, 'genHistory');
+        const q = query(historyRef, orderBy('processDateTime', 'desc'), limit(100));
+
+        return onSnapshot(q, (snapshot) => {
+            const history = snapshot.docs.map(doc => ({
+                ...doc.data(),
+                id: doc.id,
+                processDateTime: timestampToNumber(doc.data().processDateTime)
+            } as GenHistory));
+            callback(history);
+        });
     }
 };

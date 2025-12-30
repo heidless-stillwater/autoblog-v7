@@ -28,6 +28,8 @@ export interface Settings {
     perplexityModel: 'sonar' | 'sonar-reasoning' | 'sonar-deep-research';
     theme: 'light' | 'dark' | 'system';
     customSeeds?: string[];
+    topicQueue?: string[];
+    queueProcessInterval?: number; // In minutes
 }
 
 export interface PerplexityPrompt {
@@ -95,4 +97,21 @@ export interface AuthState {
     user: User | null;
     loading: boolean;
     error: string | null;
+}
+
+export interface TopicQueueSnapshot {
+    id: string; // topicQueue-{id}-{timestamp}
+    queue: string[];
+    createdAt: number;
+    genDate: number; // For scheduling or other purposes
+    status?: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+export interface GenHistory {
+    id: string;
+    topicSetName: string;
+    topicName: string;
+    topicState: 'pending' | 'processing' | 'completed' | 'error';
+    processDateTime: number;
+    topicArticleURL: string; // "pending" or Article link
 }

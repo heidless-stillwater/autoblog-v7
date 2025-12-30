@@ -220,6 +220,18 @@ const SettingsModal = () => {
                             <option value="light">Light</option>
                         </select>
                     </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">Queue Process Interval (minutes)</label>
+                        <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={localSettings.queueProcessInterval || 1}
+                            onChange={(e) => setLocalSettings({ ...localSettings, queueProcessInterval: parseInt(e.target.value) || 1 })}
+                            className="input-field"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">How often the background job checks for due snapshots.</p>
+                    </div>
                 </div>
 
                 <div className="mt-8 flex justify-end">

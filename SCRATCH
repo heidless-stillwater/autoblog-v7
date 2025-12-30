@@ -1,2 +1,62 @@
-Error loading public content: FirebaseError: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/heidless-firebase/firestore/databases/autoblog-db-0/indexes?create_composite=ClZwcm9qZWN0cy9oZWlkbGVzcy1maXJlYmFzZS9kYXRhYmFzZXMvYXV0b2Jsb2ctZGItMC9jb2xsZWN0aW9uR3JvdXBzL2FydGljbGVzL2luZGV4ZXMvXxACGgoKBnN0YXR1cxABGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI
-overrideMethod @ installHook.js:1
+# Live Environment Testing Walkthrough
+
+This document outlines the steps to deploy your current changes to the live environment and verify the new **Topic Execution Flow** and **Generation History** features.
+
+## 1. Deployment Steps
+
+To push your local changes to the live `autoblog-v7` site, run the following commands in your terminal:
+
+```bash
+# 1. Build the frontend production bundle
+npm run build
+
+# 2. Deploy to Firebase (Hosting and Functions)
+firebase deploy --only hosting:autoblog,functions
+```
+
+> [!NOTE]
+> Ensure you are logged into the correct Firebase account and have the `heidless-firebase` project selected.
+
+---
+
+## 2. Verification Flow (Live)
+
+Once deployed, access your live app at [https://autoblog-v7.web.app/](https://autoblog-v7.web.app/).
+
+### A. Batch Generation & Queue Management
+1.  Navigate to the **Topic Manager**.
+2.  Add a few topics to the **Topic Queue**.
+3.  Use the new **-1m** or **-5m** buttons next to the `GenDate` field to set the schedule to a "past" time.
+4.  Click **Gen All**.
+5.  **Verify**:
+    *   The `TopicQueueProgress` component on the right should show: `Processing {topic} : {timestamp}`.
+    *   After each 3-second simulation, the topic should be **removed** from the Topic Queue.
+    *   The batch progress bar should increment accordingly.
+
+### B. Generation History Tracking
+1.  While the batch is running (or after it completes), scroll down to the **Generation History** table.
+2.  **Verify**:
+    *   New records appear with `topicState` as `processing` (with a spinning loader).
+    *   On completion, the state changes to `completed` (green checkmark).
+    *   The `Article` column should now show a "View Article" link instead of `pending`.
+    *   The `Last Update` timestamp should reflect the time of completion.
+
+### C. Single Article Generation
+1.  Double-click a topic in the queue (or select a topic and click "Generate Article").
+2.  In the review step, use the new **-1m** button next to the "Schedule Publication" datepicker.
+3.  Click **Save Article**.
+4.  **Verify**:
+    *   The topic is removed from the queue.
+    *   You are redirected to the Articles list.
+    *   A new record appears in the **History** table matching this generation.
+
+---
+
+## 3. Maintenance
+
+If you need to clear your history or queue for a fresh test run:
+*   **History**: Use the red Trash icon in the History table to delete individual records.
+*   **Queue**: Use the X icons in the Topic Queue or clear them via a Snapshot restoration.
+
+> [!IMPORTANT]
+> The AI generation is currently in "flow testing" mode (simulated) for batch processing. If you wish to trigger real AI generation for a single article, ensure your **Perplexity API Key** is set in the Settings modal of the live app.

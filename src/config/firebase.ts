@@ -1,9 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
-// TODO: Replace with your Firebase project configuration
-// Get this from Firebase Console > Project Settings > General > Your apps > SDK setup and configuration
+// Firebase project configuration
 const firebaseConfig = {
     apiKey: "AIzaSyAQ1mxB2uj86qOAXlT_mUQitK61PQiqXYY",
     authDomain: "heidless-firebase.firebaseapp.com",
@@ -23,5 +22,16 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Initialize Firestore with explicit database ID: autoblog-db-0
 export const db = getFirestore(app, 'autoblog-db-0');
+
+// Local Emulator Support
+const useEmulators =
+    import.meta.env.VITE_USE_EMULATORS === 'true' ||
+    (typeof window !== 'undefined' && window.location.search.includes('useEmulator=true'));
+
+if (useEmulators) {
+    console.log('Connecting to Firebase Emulators...');
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099');
+}
 
 export default app;

@@ -6,9 +6,18 @@ import { ChevronRight, ChevronDown, Folder, FileText, Download, Upload, Trash2 }
 interface TopicExplorerProps {
     onSelectTopic: (topic: string) => void;
     selectedTopic?: string;
+    topicQueue?: string[];
+    onToggleTopic?: (topic: string) => void;
+    onBulkToggleTopic?: (topics: string[], shouldSelect: boolean) => void;
 }
 
-const TopicExplorer: React.FC<TopicExplorerProps> = ({ onSelectTopic, selectedTopic }) => {
+const TopicExplorer: React.FC<TopicExplorerProps> = ({
+    onSelectTopic,
+    selectedTopic,
+    topicQueue = [],
+    onToggleTopic,
+    onBulkToggleTopic
+}) => {
     const { topicSets, deleteTopicSet, importTopicSets } = useStore();
     const [expandedSeeds, setExpandedSeeds] = useState<Set<string>>(new Set());
 
@@ -108,43 +117,85 @@ const TopicExplorer: React.FC<TopicExplorerProps> = ({ onSelectTopic, selectedTo
             <div className="space-y-1 overflow-y-auto pr-2 custom-scrollbar flex-1 max-h-[400px]">
                 {topicSets.map((ts) => (
                     <div key={ts.id} className="select-none">
-                        <div
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-slate-800/50 transition-colors group ${expandedSeeds.has(ts.id) ? 'text-indigo-300' : 'text-slate-400'
-                                }`}
-                        >
-                            <span
-                                onClick={() => toggleSeed(ts.id)}
-                                className="p-0.5 hover:bg-slate-700 rounded"
-                            >
-                                {expandedSeeds.has(ts.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            </span>
-                            <span
-                                onClick={() => toggleSeed(ts.id)}
-                                className="flex-1 text-sm font-medium truncate"
-                            >
-                                {ts.seed} <span className="text-xs opacity-50">({ts.topics.length})</span>
-                            </span>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); deleteTopicSet(ts.id); }}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
-                            >
-                                <Trash2 size={12} />
-                            </button>
-                        </div>
+                        {/* Calculate if any topics in this set are selected in the queue */}
+                        {(() => {
+                            const hasSelectedTopics = ts.topics.some(t => topicQueue.includes(t));
+                            return (
+                                <div
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-slate-800/50 transition-colors group ${hasSelectedTopics
+                                        ? 'text-amber-400 font-medium bg-amber-500/5 hover:bg-amber-500/10'
+                                        : expandedSeeds.has(ts.id) ? 'text-indigo-300' : 'text-slate-400'
+                                        }`}
+                                >
+                                    <span
+                                        onClick={() => toggleSeed(ts.id)}
+                                        className="p-0.5 hover:bg-slate-700/50 rounded"
+                                    >
+                                        {expandedSeeds.has(ts.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </span>
+                                    <span
+                                        onClick={() => toggleSeed(ts.id)}
+                                        className="flex-1 text-sm truncate flex items-center gap-2"
+                                    >
+                                        {ts.seed}
+                                        {hasSelectedTopics && <span className="text-[9px] bg-amber-500 text-white px-1 rounded-sm font-black animate-pulse">ACTIVE</span>}
+                                        <span className="text-xs opacity-50">({ts.topics.length})</span>
+                                    </span>
+
+                                    {onBulkToggleTopic && (
+                                        <input
+                                            type="checkbox"
+                                            onClick={(e) => e.stopPropagation()}
+                                            checked={ts.topics.every(t => topicQueue.includes(t))}
+                                            onChange={(e) => {
+                                                e.stopPropagation();
+                                                onBulkToggleTopic(ts.topics, e.target.checked);
+                                            }}
+                                            className={`mr-2 rounded border-slate-600 bg-slate-800 focus:ring-offset-0 cursor-pointer 
+                                                ${hasSelectedTopics ? 'text-amber-500 focus:ring-amber-500/50' : 'text-indigo-500 focus:ring-indigo-500/50'}`}
+                                            title="Select All/None"
+                                        />
+                                    )}
+
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); deleteTopicSet(ts.id); }}
+                                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            );
+                        })()}
 
                         {expandedSeeds.has(ts.id) && (
                             <div className="ml-6 space-y-0.5 mt-1 border-l-2 border-slate-800 pl-2">
                                 {ts.topics.map((topic, idx) => (
                                     <div
                                         key={`${ts.id}-${idx}`}
-                                        onClick={() => onSelectTopic(topic)}
-                                        className={`px-2 py-1.5 rounded-md text-sm cursor-pointer transition-all flex items-center gap-2 ${selectedTopic === topic
+                                        className={`px-2 py-1.5 rounded-md text-sm transition-all flex items-center gap-2 group/topic ${selectedTopic === topic
                                             ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                                             : 'text-slate-400 hover:bg-slate-800 hover:text-slate-300'
                                             }`}
                                     >
-                                        <FileText size={12} className={selectedTopic === topic ? 'text-indigo-400' : 'opacity-50'} />
-                                        <span className="truncate">{topic}</span>
+                                        {onToggleTopic && (
+                                            <input
+                                                type="checkbox"
+                                                checked={topicQueue.includes(topic)}
+                                                onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    onToggleTopic(topic);
+                                                }}
+                                                className="rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500/50 cursor-pointer"
+                                            />
+                                        )}
+
+                                        <div
+                                            className="flex items-center gap-2 flex-1 cursor-pointer overflow-hidden"
+                                            onClick={() => onSelectTopic(topic)}
+                                        >
+                                            <FileText size={12} className={selectedTopic === topic ? 'text-indigo-400' : 'opacity-50'} />
+                                            <span className="truncate">{topic}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

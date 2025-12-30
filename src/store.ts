@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost } from './types';
-import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService } from './services/firestoreService';
+import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost, TopicQueueSnapshot, GenHistory } from './types';
+import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService, topicQueueService, genHistoryService } from './services/firestoreService';
 import { perplexityService } from './services/perplexityService';
 
 interface AppState {
@@ -45,6 +45,7 @@ interface AppState {
     setLoading: (loading: boolean) => void;
 
     // Article Actions
+    loadArticles: () => Promise<void>;
     addArticle: (article: Omit<Article, 'id'>) => Promise<void>;
     updateArticle: (id: string, updates: Partial<Article>) => Promise<void>;
     deleteArticle: (id: string) => Promise<void>;
@@ -69,6 +70,25 @@ interface AppState {
     deleteImagePrompt: (id: string) => Promise<void>;
     loadImagePrompts: (articleId?: string) => Promise<void>;
 
+    // Topic Queue Snapshots
+    topicQueueSnapshots: TopicQueueSnapshot[];
+    loadTopicQueueSnapshots: () => Promise<void>;
+    saveTopicQueueSnapshot: (queue: string[], name?: string, genDate?: number) => Promise<void>;
+    updateTopicQueueSnapshot: (id: string, queue: string[], genDate?: number) => Promise<void>;
+    deleteTopicQueueSnapshot: (id: string) => Promise<void>;
+
+    // Real-time Queue Logs
+    queueLogs: any[];
+    subscribeToQueueLogs: () => void;
+    unsubscribeFromQueueLogs: () => void;
+
+    // Generation History Actions
+    genHistory: GenHistory[];
+    loadGenHistory: () => Promise<void>;
+    addGenHistory: (record: Omit<GenHistory, 'id'>) => Promise<string>;
+    updateGenHistory: (id: string, updates: Partial<GenHistory>) => Promise<void>;
+    deleteGenHistory: (id: string) => Promise<void>;
+
     // Clear all data on logout
     clearData: () => void;
 }
@@ -81,6 +101,8 @@ const defaultSettings: Settings = {
     perplexityModel: 'sonar',
     theme: 'system',
     customSeeds: [],
+    topicQueue: [],
+    queueProcessInterval: 1,
 };
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -92,6 +114,9 @@ export const useStore = create<AppState>()((set, get) => ({
     articles: [],
     perplexityPrompts: [],
     imagePrompts: [],
+    topicQueueSnapshots: [],
+    queueLogs: [],
+    genHistory: [],
     isLoading: false,
     isInitialized: false,
 
@@ -121,14 +146,15 @@ export const useStore = create<AppState>()((set, get) => ({
         }
 
         try {
-            const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts] = await Promise.all([
+            const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts, genHistory] = await Promise.all([
                 postsService.getAll(userId),
                 mediaService.getAll(userId),
                 settingsService.get(userId),
                 articlesService.getAll(userId),
                 perplexityService.getAllResearch(userId),
                 topicSetsService.getAll(userId),
-                imagePromptsService.getAll(userId)
+                imagePromptsService.getAll(userId),
+                genHistoryService.getAll(userId)
             ]);
 
             set({
@@ -139,6 +165,7 @@ export const useStore = create<AppState>()((set, get) => ({
                 perplexityPrompts,
                 topicSets,
                 imagePrompts,
+                genHistory,
                 isLoading: false,
                 isInitialized: true
             });
@@ -269,6 +296,19 @@ export const useStore = create<AppState>()((set, get) => ({
     setLoading: (loading) => set({ isLoading: loading }),
 
     // Article Actions
+    loadArticles: async () => {
+        const { user } = get();
+        if (!user) return;
+        set({ isLoading: true });
+        try {
+            const articles = await articlesService.getAll(user.uid);
+            set({ articles, isLoading: false });
+        } catch (error) {
+            console.error('Error loading articles:', error);
+            set({ isLoading: false });
+        }
+    },
+
     addArticle: async (article) => {
         const { user } = get();
         if (!user) throw new Error('User not authenticated');
@@ -696,6 +736,86 @@ export const useStore = create<AppState>()((set, get) => ({
         }
     },
 
+    loadTopicQueueSnapshots: async () => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            const snapshots = await topicQueueService.getAllSnapshots(user.uid);
+            set({ topicQueueSnapshots: snapshots });
+        } catch (error) {
+            console.error('Error loading topic queue snapshots:', error);
+        }
+    },
+
+    saveTopicQueueSnapshot: async (queue: string[], name: string = 'backup', genDate?: number) => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            set({ isLoading: true });
+            await topicQueueService.saveSnapshot(user.uid, queue, name, genDate);
+            // Reload snapshots
+            const snapshots = await topicQueueService.getAllSnapshots(user.uid);
+            set({ topicQueueSnapshots: snapshots, isLoading: false });
+        } catch (error) {
+            console.error('Error saving topic queue snapshot:', error);
+            set({ isLoading: false });
+        }
+    },
+
+    updateTopicQueueSnapshot: async (id: string, queue: string[], genDate?: number) => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            set({ isLoading: true });
+            await topicQueueService.updateSnapshot(user.uid, id, queue, genDate);
+            set(state => ({
+                topicQueueSnapshots: state.topicQueueSnapshots.map(s =>
+                    s.id === id ? { ...s, queue, genDate: genDate || s.genDate, status: 'pending' } : s
+                ),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error updating topic queue snapshot:', error);
+            set({ isLoading: false });
+        }
+    },
+
+    deleteTopicQueueSnapshot: async (id: string) => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            await topicQueueService.deleteSnapshot(user.uid, id);
+            set(state => ({
+                topicQueueSnapshots: state.topicQueueSnapshots.filter(s => s.id !== id)
+            }));
+        } catch (error) {
+            console.error('Error deleting topic queue snapshot:', error);
+        }
+    },
+
+    // Real-time Queue Logs
+    subscribeToQueueLogs: () => {
+        const { user } = get();
+        if (!user) return;
+
+        // Clean up existing if any
+        const { unsubscribeFromQueueLogs } = get();
+        unsubscribeFromQueueLogs();
+
+        const unsubscribe = topicQueueService.subscribeToQueueLogs(user.uid, (logs) => {
+            set({ queueLogs: logs });
+        });
+
+        (window as any)._unsubscribeQueueLogs = unsubscribe;
+    },
+
+    unsubscribeFromQueueLogs: () => {
+        if ((window as any)._unsubscribeQueueLogs) {
+            (window as any)._unsubscribeQueueLogs();
+            (window as any)._unsubscribeQueueLogs = null;
+        }
+    },
+
     // Clear all data on logout
     clearData: () => set({
         user: null,
@@ -706,9 +826,82 @@ export const useStore = create<AppState>()((set, get) => ({
         perplexityPrompts: [],
         topicSets: [],
         imagePrompts: [],
+        topicQueueSnapshots: [],
+        genHistory: [],
         isLoading: false,
         isInitialized: false
-    })
+    }),
+
+    loadGenHistory: async () => {
+        const { user } = get();
+        if (!user) return;
+        set({ isLoading: true });
+        try {
+            const genHistory = await genHistoryService.getAll(user.uid);
+            set({ genHistory, isLoading: false });
+        } catch (error) {
+            console.error('Error loading gen history:', error);
+            set({ isLoading: false });
+        }
+    },
+
+    addGenHistory: async (record) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            const id = await genHistoryService.create(user.uid, record);
+            const newRecord = { ...record, id };
+            set((state) => ({
+                genHistory: [newRecord, ...state.genHistory],
+                isLoading: false
+            }));
+            return id;
+        } catch (error) {
+            console.error('Error adding gen history:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    updateGenHistory: async (id, updates) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await genHistoryService.update(user.uid, id, updates);
+            set((state) => ({
+                genHistory: state.genHistory.map((h) =>
+                    h.id === id ? { ...h, ...updates, processDateTime: updates.processDateTime || h.processDateTime } : h
+                ),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error updating gen history:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    deleteGenHistory: async (id) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await genHistoryService.delete(user.uid, id);
+            set((state) => ({
+                genHistory: state.genHistory.filter((h) => h.id !== id),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error deleting gen history:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    }
 }));
 
 // Expose store for testing
