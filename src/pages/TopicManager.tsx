@@ -5,7 +5,7 @@ import AutoBlogGenerator from '../components/AutoBlogGenerator';
 import TopicQueue from '../components/TopicQueue';
 import TopicSelector from '../components/TopicSelector';
 import { format } from 'date-fns';
-import { Sparkles, FileText, Zap, Loader2, CheckCircle2 } from 'lucide-react';
+import { Sparkles, FileText, Zap, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import TopicQueueProgress from '../components/TopicQueueProgress';
 import type { LogEntry } from '../components/TopicQueueProgress';
 import History from '../components/History';
@@ -31,10 +31,9 @@ const TopicManager = () => {
         loadGenHistory
     } = useStore();
 
-    // Default genDate to local YYYY-MM-DDTHH:mm format
+    // Default genDate to NOW in local YYYY-MM-DDTHH:mm format
     const [genDate, setGenDate] = useState<string>(() => {
         const d = new Date();
-        d.setFullYear(d.getFullYear() + 1);
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
@@ -48,6 +47,7 @@ const TopicManager = () => {
     const [topicQueue, setTopicQueue] = useState<string[]>([]);
     const [batchProgress, setBatchProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
     const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -126,9 +126,17 @@ const TopicManager = () => {
             return;
         }
 
-        if (!confirm(`Generate ${topicsToGen.length} articles? This will take some time and use API credits.`)) {
-            return;
-        }
+        setConfirmModal({
+            message: `Generate ${topicsToGen.length} articles? This will take some time and use API credits.`,
+            onConfirm: () => {
+                setConfirmModal(null);
+                proceedWithGeneration();
+            }
+        });
+    };
+
+    const proceedWithGeneration = async () => {
+        const topicsToGen = topicQueue.filter(topic => !articles.some(a => a.topic === topic));
 
         setView('batch-generation');
         setBatchProgress({ current: 0, total: topicsToGen.length, status: 'Starting batch generation...' });
@@ -359,6 +367,43 @@ const TopicManager = () => {
                     isProcessing={view === 'batch-generation' || queueLogs.some(l => l.status === 'processing')}
                 />
             </div>
+
+            {/* Confirmation Modal */}
+            {confirmModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
+                        onClick={() => setConfirmModal(null)}
+                    />
+                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+                        <div className="p-6">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 shrink-0">
+                                    <AlertCircle size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white mb-2">Confirm Action</h3>
+                                    <p className="text-sm text-slate-300">{confirmModal.message}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setConfirmModal(null)}
+                                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

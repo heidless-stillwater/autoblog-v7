@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, X, Zap, Calendar, ArrowUpDown, GripVertical, Save, FolderOpen, Clock, Trash2 } from 'lucide-react';
+import { Layers, X, Zap, Calendar, ArrowUpDown, GripVertical, Save, FolderOpen, Clock, Trash2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
 import type { Article, TopicQueueSnapshot } from '../types';
 
 export interface TopicQueueProps {
@@ -42,6 +42,7 @@ export default function TopicQueue({
     const [showSnapshots, setShowSnapshots] = useState(false);
     const [snapshotLabel, setSnapshotLabel] = useState('backup');
     const [status, setStatus] = useState<{ type: 'success' | 'info' | 'error', msg: string } | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
     const setTimedStatus = (msg: string, type: 'success' | 'info' | 'error' = 'success') => {
         setStatus({ msg, type });
@@ -133,7 +134,8 @@ export default function TopicQueue({
     };
 
     const addTimeOffset = (mins: number) => {
-        const d = new Date();
+        // Parse the current genDate value
+        const d = new Date(genDate);
         d.setMinutes(d.getMinutes() + mins);
         // Format to YYYY-MM-DDTHH:mm in LOCAL time for the input
         const year = d.getFullYear();
@@ -143,7 +145,7 @@ export default function TopicQueue({
         const minutes = String(d.getMinutes()).padStart(2, '0');
         const formatted = `${year}-${month}-${day}T${hours}:${minutes}`;
         onGenDateChange(formatted);
-        setTimedStatus(`Set to +${mins}m from now`, 'info');
+        setTimedStatus(`${mins > 0 ? '+' : ''}${mins}m`, 'info');
     };
 
     const formatSnapshotDate = (ts: number) => {
@@ -183,34 +185,41 @@ export default function TopicQueue({
                             className="bg-transparent border-none text-[10px] text-indigo-300 focus:ring-0 p-0 w-[125px] font-bold outline-none"
                         />
                         <div className="flex gap-1 ml-1 border-l border-slate-700/50 pl-1.5">
-                            <button
-                                onClick={() => addTimeOffset(-1)}
-                                className="text-[8px] font-black text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors"
-                                title="-1 Minute"
-                            >
-                                -1m
-                            </button>
-                            <button
-                                onClick={() => addTimeOffset(-5)}
-                                className="text-[8px] font-black text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors"
-                                title="-5 Minutes"
-                            >
-                                -5m
-                            </button>
-                            <button
-                                onClick={() => addTimeOffset(1)}
-                                className="text-[8px] font-black text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors"
-                                title="+1 Minute"
-                            >
-                                +1m
-                            </button>
-                            <button
-                                onClick={() => addTimeOffset(5)}
-                                className="text-[8px] font-black text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors"
-                                title="+5 Minutes"
-                            >
-                                +5m
-                            </button>
+                            {/* 1 Minute Controls */}
+                            <div className="flex flex-col gap-0.5">
+                                <button
+                                    onClick={() => addTimeOffset(1)}
+                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                    title="+1 Minute"
+                                >
+                                    <ChevronUp size={10} />
+                                </button>
+                                <button
+                                    onClick={() => addTimeOffset(-1)}
+                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                    title="-1 Minute"
+                                >
+                                    <ChevronDown size={10} />
+                                </button>
+                            </div>
+
+                            {/* 5 Minutes Controls */}
+                            <div className="flex flex-col gap-0.5">
+                                <button
+                                    onClick={() => addTimeOffset(5)}
+                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                    title="+5 Minutes"
+                                >
+                                    <ChevronUp size={10} />
+                                </button>
+                                <button
+                                    onClick={() => addTimeOffset(-5)}
+                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                    title="-5 Minutes"
+                                >
+                                    <ChevronDown size={10} />
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -293,11 +302,15 @@ export default function TopicQueue({
                                                                 <div
                                                                     className="flex-1 cursor-pointer min-w-0 pr-4"
                                                                     onClick={() => {
-                                                                        if (confirm(`Load snapshot "${snap.id}"? This will replace your current queue.`)) {
-                                                                            onLoadSnapshot(snap);
-                                                                            setShowSnapshots(false);
-                                                                            setTimedStatus('Snapshot loaded');
-                                                                        }
+                                                                        setConfirmModal({
+                                                                            message: `Load snapshot "${snap.id}"? This will replace your current queue.`,
+                                                                            onConfirm: () => {
+                                                                                onLoadSnapshot(snap);
+                                                                                setShowSnapshots(false);
+                                                                                setTimedStatus('Snapshot loaded');
+                                                                                setConfirmModal(null);
+                                                                            }
+                                                                        });
                                                                     }}
                                                                 >
                                                                     <div className="text-sm text-indigo-300 font-bold truncate tracking-tight mb-1">{snap.id}</div>
@@ -310,12 +323,16 @@ export default function TopicQueue({
                                                                     {onUpdateSnapshot && (
                                                                         <button
                                                                             onClick={() => {
-                                                                                if (confirm('Overwrite this snapshot with the current queue?')) {
-                                                                                    const genDateMs = new Date(genDate).getTime();
-                                                                                    onUpdateSnapshot(snap.id, queue, genDateMs);
-                                                                                    setTimedStatus('Snapshot updated');
-                                                                                    setShowSnapshots(false);
-                                                                                }
+                                                                                setConfirmModal({
+                                                                                    message: 'Overwrite this snapshot with the current queue?',
+                                                                                    onConfirm: () => {
+                                                                                        const genDateMs = new Date(genDate).getTime();
+                                                                                        onUpdateSnapshot(snap.id, queue, genDateMs);
+                                                                                        setTimedStatus('Snapshot updated');
+                                                                                        setShowSnapshots(false);
+                                                                                        setConfirmModal(null);
+                                                                                    }
+                                                                                });
                                                                             }}
                                                                             className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-all"
                                                                             title="Overwrite Snapshot"
@@ -326,10 +343,14 @@ export default function TopicQueue({
                                                                     {onDeleteSnapshot && (
                                                                         <button
                                                                             onClick={() => {
-                                                                                if (confirm('Delete this snapshot?')) {
-                                                                                    onDeleteSnapshot(snap.id);
-                                                                                    setTimedStatus('Snapshot deleted', 'info');
-                                                                                }
+                                                                                setConfirmModal({
+                                                                                    message: 'Delete this snapshot?',
+                                                                                    onConfirm: () => {
+                                                                                        onDeleteSnapshot(snap.id);
+                                                                                        setTimedStatus('Snapshot deleted', 'info');
+                                                                                        setConfirmModal(null);
+                                                                                    }
+                                                                                });
                                                                             }}
                                                                             className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                                                                             title="Delete"
@@ -480,6 +501,43 @@ export default function TopicQueue({
                 <span>{queue.length} topics</span>
                 <span className="opacity-50">Double-click to edit</span>
             </div>
+
+            {/* Confirmation Modal */}
+            {confirmModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
+                        onClick={() => setConfirmModal(null)}
+                    />
+                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+                        <div className="p-6">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 shrink-0">
+                                    <AlertCircle size={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white mb-2">Confirm Action</h3>
+                                    <p className="text-sm text-slate-300">{confirmModal.message}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setConfirmModal(null)}
+                                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
