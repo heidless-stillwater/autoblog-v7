@@ -14,6 +14,7 @@ import {
     limit,
     onSnapshot,
     QuerySnapshot,
+    writeBatch,
     type DocumentData
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -427,6 +428,19 @@ export const genHistoryService = {
     async delete(userId: string, id: string): Promise<void> {
         const docRef = doc(db, 'users', userId, 'genHistory', id);
         await deleteDoc(docRef);
+    },
+
+    async clearAll(userId: string): Promise<void> {
+        const historyRef = collection(db, 'users', userId, 'genHistory');
+        const snapshot = await getDocs(historyRef);
+
+        if (snapshot.empty) return;
+
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
     },
 
     subscribe(userId: string, callback: (history: GenHistory[]) => void): () => void {

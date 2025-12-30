@@ -184,38 +184,20 @@ export default function TopicQueue({
                             onChange={(e) => onGenDateChange(e.target.value)}
                             className="bg-transparent border-none text-[10px] text-indigo-300 focus:ring-0 p-0 w-[125px] font-bold outline-none"
                         />
-                        <div className="flex gap-1 ml-1 border-l border-slate-700/50 pl-1.5">
-                            {/* 1 Minute Controls */}
+                        <div className="flex gap-1 ml-1 border-l border-slate-700/50 pl-1.5 items-center">
+                            {/* Combined Controls */}
                             <div className="flex flex-col gap-0.5">
                                 <button
-                                    onClick={() => addTimeOffset(1)}
+                                    onClick={(e) => addTimeOffset(e.shiftKey ? 5 : 1)}
                                     className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="+1 Minute"
+                                    title="Add 1 min (Shift+Click for +5)"
                                 >
                                     <ChevronUp size={10} />
                                 </button>
                                 <button
-                                    onClick={() => addTimeOffset(-1)}
+                                    onClick={(e) => addTimeOffset(e.shiftKey ? -5 : -1)}
                                     className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="-1 Minute"
-                                >
-                                    <ChevronDown size={10} />
-                                </button>
-                            </div>
-
-                            {/* 5 Minutes Controls */}
-                            <div className="flex flex-col gap-0.5">
-                                <button
-                                    onClick={() => addTimeOffset(5)}
-                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="+5 Minutes"
-                                >
-                                    <ChevronUp size={10} />
-                                </button>
-                                <button
-                                    onClick={() => addTimeOffset(-5)}
-                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="-5 Minutes"
+                                    title="Sub 1 min (Shift+Click for -5)"
                                 >
                                     <ChevronDown size={10} />
                                 </button>

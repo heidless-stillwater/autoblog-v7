@@ -88,6 +88,7 @@ interface AppState {
     addGenHistory: (record: Omit<GenHistory, 'id'>) => Promise<string>;
     updateGenHistory: (id: string, updates: Partial<GenHistory>) => Promise<void>;
     deleteGenHistory: (id: string) => Promise<void>;
+    clearGenHistory: () => Promise<void>;
 
     // Clear all data on logout
     clearData: () => void;
@@ -898,6 +899,21 @@ export const useStore = create<AppState>()((set, get) => ({
             }));
         } catch (error) {
             console.error('Error deleting gen history:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    clearGenHistory: async () => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await genHistoryService.clearAll(user.uid);
+            set({ genHistory: [], isLoading: false });
+        } catch (error) {
+            console.error('Error clearing gen history:', error);
             set({ isLoading: false });
             throw error;
         }

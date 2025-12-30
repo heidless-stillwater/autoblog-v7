@@ -28,7 +28,8 @@ const TopicManager = () => {
         topicSets,
         addGenHistory,
         updateGenHistory,
-        loadGenHistory
+        loadGenHistory,
+        genHistory
     } = useStore();
 
     // Default genDate to NOW in local YYYY-MM-DDTHH:mm format
@@ -47,7 +48,7 @@ const TopicManager = () => {
     const [topicQueue, setTopicQueue] = useState<string[]>([]);
     const [batchProgress, setBatchProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{ message: React.ReactNode; onConfirm: () => void; onCancel?: () => void } | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -150,6 +151,59 @@ const TopicManager = () => {
                 // Find topic set for history
                 const topicSet = topicSets.find(ts => ts.topics.includes(topic));
                 const topicSetName = topicSet ? topicSet.seed : 'Custom';
+
+                // Check for existing history
+                const existingHistory = genHistory.find(h => h.topicSetName === topicSetName && h.topicName === topic);
+
+                if (existingHistory) {
+                    const shouldRegenerate = await new Promise<boolean>((resolve) => {
+                        setConfirmModal({
+                            message: (
+                                <div className="space-y-3">
+                                    <p className="font-semibold text-slate-200">This topic has already been generated:</p>
+                                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+                                        <ul className="space-y-1.5 text-sm">
+                                            <li className="flex gap-2">
+                                                <span className="text-slate-500 w-12 shrink-0">Topic:</span>
+                                                <span className="text-indigo-400 font-bold">{topic}</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="text-slate-500 w-12 shrink-0">Set:</span>
+                                                <span className="text-slate-300">{topicSetName}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <p className="text-slate-400 text-sm">Do you want to regenerate it?</p>
+                                </div>
+                            ),
+                            onConfirm: () => resolve(true),
+                            onCancel: () => resolve(false)
+                        });
+                    });
+
+                    if (!shouldRegenerate) {
+                        const timestamp = format(new Date(), 'HH:mm:ss');
+                        setLogs(prev => [...prev, {
+                            topic,
+                            timestamp,
+                            status: 'skipped',
+                            message: `you have chosen to skip the TOPIC:${topic} : ${timestamp}`
+                        }]);
+                        setBatchProgress(prev => ({
+                            ...prev,
+                            current: i + 1,
+                            status: `Skipped ${topic} (Already Generated)`
+                        }));
+
+                        // Remove from queue since we processed (skipped) it
+                        const currentQueue = useStore.getState().settings.topicQueue || [];
+                        const updatedQueue = currentQueue.filter(t => t !== topic);
+                        await updateQueue(updatedQueue);
+
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                }
 
                 // Add history record
                 const historyId = await addGenHistory({
@@ -383,13 +437,16 @@ const TopicManager = () => {
                                 </div>
                                 <div className="flex-1">
                                     <h3 className="text-lg font-bold text-white mb-2">Confirm Action</h3>
-                                    <p className="text-sm text-slate-300">{confirmModal.message}</p>
+                                    <div className="text-sm text-slate-300">{confirmModal.message}</div>
                                 </div>
                             </div>
                         </div>
                         <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
                             <button
-                                onClick={() => setConfirmModal(null)}
+                                onClick={() => {
+                                    if (confirmModal.onCancel) confirmModal.onCancel();
+                                    setConfirmModal(null);
+                                }}
                                 className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
                             >
                                 Cancel

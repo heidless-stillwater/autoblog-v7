@@ -4,7 +4,8 @@ import { Terminal, Clock, CheckCircle2, Loader2 } from 'lucide-react';
 export interface LogEntry {
     topic: string;
     timestamp: string;
-    status: 'processing' | 'completed' | 'error';
+    status: 'processing' | 'completed' | 'error' | 'skipped';
+    message?: string;
 }
 
 interface TopicQueueProgressProps {
@@ -51,19 +52,34 @@ const TopicQueueProgress: React.FC<TopicQueueProgressProps> = ({ logs, isProcess
                             key={idx}
                             className={`p-3 rounded-lg border transition-all duration-300 animate-in fade-in slide-in-from-left-2 ${log.status === 'processing'
                                 ? 'border-indigo-500/30 bg-indigo-500/5 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                                : 'border-slate-800 bg-slate-800/20 text-slate-400'
+                                : log.status === 'skipped'
+                                    ? 'border-amber-500/20 bg-amber-500/5 text-amber-500/80'
+                                    : 'border-slate-800 bg-slate-800/20 text-slate-400'
                                 }`}
                         >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
                                     <span className="text-slate-500 mr-2">[{log.timestamp}]</span>
-                                    <span className="font-bold">Processing: </span>
-                                    <span className={log.status === 'processing' ? 'text-white' : 'text-slate-300'}>
-                                        {log.topic}
-                                    </span>
+                                    {log.message ? (
+                                        <span className="font-bold text-amber-400">
+                                            {log.message}
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span className="font-bold">
+                                                {log.status === 'skipped' ? 'Skipped: ' : 'Processing: '}
+                                            </span>
+                                            <span className={log.status === 'processing' ? 'text-white' : log.status === 'skipped' ? 'text-amber-400' : 'text-slate-300'}>
+                                                {log.topic}
+                                            </span>
+                                            {log.status === 'skipped' && <span className="text-amber-500/50 ml-2 italic text-[10px]">- Already Generated</span>}
+                                        </>
+                                    )}
                                 </div>
                                 {log.status === 'completed' ? (
                                     <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                                ) : log.status === 'skipped' ? (
+                                    <CheckCircle2 size={14} className="text-amber-500 shrink-0 opacity-50" />
                                 ) : (
                                     <Loader2 size={14} className="text-indigo-400 animate-spin shrink-0" />
                                 )}
