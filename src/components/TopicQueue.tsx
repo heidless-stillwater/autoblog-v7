@@ -153,67 +153,72 @@ export default function TopicQueue({
     };
 
     return (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 flex flex-col relative h-full">
-            <div className="flex flex-row items-center justify-between gap-4 mb-4 border-b border-slate-800 pb-2 overflow-x-auto custom-scrollbar-hide">
-                <div className="flex items-center gap-3 shrink-0">
-                    <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
-                        <Layers size={16} className="text-indigo-400" />
-                        Queue <span className="bg-indigo-500 text-white text-[10px] px-1.5 rounded-full">{queue.length}</span>
-                    </h3>
+        <div className="bg-slate-900 border border-slate-800 rounded-lg flex flex-col relative h-full overflow-hidden">
+            {/* Status Bar */}
+            <div className={`h-6 flex items-center justify-center text-[10px] font-bold uppercase tracking-wide transition-all duration-300 ${status
+                ? (status.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
+                    status.type === 'error' ? 'bg-red-500/20 text-red-400' :
+                        'bg-indigo-500/20 text-indigo-400')
+                : 'bg-slate-900 border-b border-slate-800/50'
+                }`}>
+                <span className={`transition-opacity duration-300 ${status ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform -translate-y-2'}`}>
+                    {status?.msg}
+                </span>
+            </div>
 
-                    <div className="h-4 w-px bg-slate-800 mx-1"></div>
+            <div className="p-4 flex flex-col h-full overflow-hidden">
+                <div className="flex flex-row items-center justify-between gap-4 mb-4 border-b border-slate-800 pb-2 overflow-x-auto custom-scrollbar-hide shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
+                        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+                            <Layers size={16} className="text-indigo-400" />
+                            Queue <span className="bg-indigo-500 text-white text-[10px] px-1.5 rounded-full">{queue.length}</span>
+                        </h3>
 
-                    {/* Snapshot Label Input */}
-                    <div className="flex items-center gap-2 bg-slate-800/50 rounded px-2 py-1 border border-slate-700/50">
-                        <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">ID:</span>
-                        <input
-                            type="text"
-                            value={snapshotLabel}
-                            onChange={(e) => setSnapshotLabel(e.target.value)}
-                            placeholder="Snapshot Label"
-                            className="bg-transparent border-none text-xs text-indigo-300 focus:ring-0 p-0 w-20 font-bold outline-none placeholder:text-slate-600"
-                        />
-                    </div>
+                        <div className="h-4 w-px bg-slate-800 mx-1"></div>
 
-                    {/* GenDate Input & Quick Offsets */}
-                    <div className="flex items-center gap-1.5 bg-slate-800/50 rounded px-2 py-1 border border-slate-700/50">
-                        <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">GenDate:</span>
-                        <input
-                            type="datetime-local"
-                            value={genDate}
-                            onChange={(e) => onGenDateChange(e.target.value)}
-                            className="bg-transparent border-none text-[10px] text-indigo-300 focus:ring-0 p-0 w-[125px] font-bold outline-none"
-                        />
-                        <div className="flex gap-1 ml-1 border-l border-slate-700/50 pl-1.5 items-center">
-                            {/* Combined Controls */}
-                            <div className="flex flex-col gap-0.5">
-                                <button
-                                    onClick={(e) => addTimeOffset(e.shiftKey ? 5 : 1)}
-                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="Add 1 min (Shift+Click for +5)"
-                                >
-                                    <ChevronUp size={10} />
-                                </button>
-                                <button
-                                    onClick={(e) => addTimeOffset(e.shiftKey ? -5 : -1)}
-                                    className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
-                                    title="Sub 1 min (Shift+Click for -5)"
-                                >
-                                    <ChevronDown size={10} />
-                                </button>
+                        {/* Snapshot Label Input */}
+                        <div className="flex items-center gap-2 bg-slate-800/50 rounded px-2 py-1 border border-slate-700/50">
+                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">ID:</span>
+                            <input
+                                type="text"
+                                value={snapshotLabel}
+                                onChange={(e) => setSnapshotLabel(e.target.value)}
+                                placeholder="Snapshot Label"
+                                className="bg-transparent border-none text-xs text-indigo-300 focus:ring-0 p-0 w-20 font-bold outline-none placeholder:text-slate-600"
+                            />
+                        </div>
+
+                        {/* GenDate Input & Quick Offsets */}
+                        <div className="flex items-center gap-1.5 bg-slate-800/50 rounded px-2 py-1 border border-slate-700/50">
+                            <span className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">GenDate:</span>
+                            <input
+                                type="datetime-local"
+                                value={genDate}
+                                onChange={(e) => onGenDateChange(e.target.value)}
+                                className="bg-transparent border-none text-[10px] text-indigo-300 focus:ring-0 p-0 w-[125px] font-bold outline-none"
+                            />
+                            <div className="flex gap-1 ml-1 border-l border-slate-700/50 pl-1.5 items-center">
+                                {/* Combined Controls */}
+                                <div className="flex flex-col gap-0.5">
+                                    <button
+                                        onClick={(e) => addTimeOffset(e.shiftKey ? 5 : 1)}
+                                        className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                        title="Add 1 min (Shift+Click for +5)"
+                                    >
+                                        <ChevronUp size={10} />
+                                    </button>
+                                    <button
+                                        onClick={(e) => addTimeOffset(e.shiftKey ? -5 : -1)}
+                                        className="text-slate-500 hover:text-indigo-400 bg-slate-700/30 px-1 rounded transition-colors leading-none"
+                                        title="Sub 1 min (Shift+Click for -5)"
+                                    >
+                                        <ChevronDown size={10} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Status Message */}
-                    {status && (
-                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded animate-in fade-in slide-in-from-left-2 duration-300 whitespace-nowrap ${status.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            status.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                            }`}>
-                            {status.msg}
-                        </div>
-                    )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
