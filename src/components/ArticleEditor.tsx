@@ -442,30 +442,40 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
         console.log(`[JumpToSection] Target Block ID: ${targetBlockId}`);
 
-        // 3. Scroll to the block
+        // 3. Ensure we are in edit mode
+        setShowPreview(false);
+
+        // 4. Scroll and focus the block
         if (targetBlockId) {
-            const element = document.querySelector(`[data-block-id="${targetBlockId}"]`);
-            if (element) {
-                console.log(`[JumpToSection] Found element, scrolling...`);
-                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Use setTimeout to ensure the DOM is updated after setShowPreview(false)
+            setTimeout(() => {
+                const element = document.querySelector(`[data-block-id="${targetBlockId}"]`);
+                if (element) {
+                    console.log(`[JumpToSection] Found element, scrolling...`);
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                // Visual feedback: brief highlight
-                const htmlEl = element as HTMLElement;
-                const originalBg = htmlEl.style.backgroundColor;
-                const originalTransition = htmlEl.style.transition;
+                    // Find and focus textarea if it's a text block
+                    const textarea = element.querySelector('textarea');
+                    if (textarea) {
+                        textarea.focus();
+                    }
 
-                htmlEl.style.transition = 'background-color 0.5s ease';
-                htmlEl.style.backgroundColor = 'rgba(79, 70, 229, 0.2)';
+                    // Visual feedback: brief highlight
+                    const htmlEl = element as HTMLElement;
+                    const originalBg = htmlEl.style.backgroundColor;
+                    const originalTransition = htmlEl.style.transition;
 
-                setTimeout(() => {
-                    htmlEl.style.backgroundColor = originalBg;
+                    htmlEl.style.transition = 'background-color 0.5s ease';
+                    htmlEl.style.backgroundColor = 'rgba(79, 70, 229, 0.2)';
+
                     setTimeout(() => {
-                        htmlEl.style.transition = originalTransition;
-                    }, 500);
-                }, 2000);
-            } else {
-                console.warn(`[JumpToSection] Element with data-block-id="${targetBlockId}" not found in DOM`);
-            }
+                        htmlEl.style.backgroundColor = originalBg;
+                        setTimeout(() => {
+                            htmlEl.style.transition = originalTransition;
+                        }, 500);
+                    }, 2000);
+                }
+            }, 100);
         } else {
             console.warn(`[JumpToSection] Could not find block for "${sectionTitle}"`);
         }
