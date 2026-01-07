@@ -19,7 +19,7 @@ import ImagePromptManager from './ImagePromptManager';
 import { format } from 'date-fns';
 import ResearchSelector from './ResearchSelector';
 import type { Article, ArticleVersion, PerplexityPrompt, MediaItem } from '../types';
-import { Trash2, MoveUp, MoveDown, Image as ImageIcon } from 'lucide-react';
+import { Trash2, MoveUp, MoveDown, Image as ImageIcon, Star } from 'lucide-react';
 import MediaSelectorModal from './MediaSelectorModal';
 import ConfirmModal from './ConfirmModal';
 
@@ -399,6 +399,19 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         }
     };
 
+    const handleSetHero = async (url: string) => {
+        try {
+            await updateArticle(article.id, { heroImage: url });
+            setConfirmModal({
+                message: 'Hero image updated!',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
+        } catch (error) {
+            console.error('Failed to set hero image:', error);
+        }
+    };
+
     const handleJumpToSection = (sectionTitle: string) => {
         const lowerTitle = sectionTitle.toLowerCase();
         console.log(`[JumpToSection] Target: "${sectionTitle}"`);
@@ -760,6 +773,13 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                                                 className="w-full h-auto max-h-[600px] object-contain"
                                             />
                                             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleSetHero(block.url!)}
+                                                    title="Set as Hero Image"
+                                                    className="p-2 bg-amber-500/80 backdrop-blur text-white rounded-lg border border-amber-500/50 hover:bg-amber-600 transition-colors"
+                                                >
+                                                    <Star size={16} className="fill-current" />
+                                                </button>
                                                 <button
                                                     onClick={() => moveBlock(index, 'up')}
                                                     disabled={index === 0}
