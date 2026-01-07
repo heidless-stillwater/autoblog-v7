@@ -1,28 +1,30 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Sparkles,
-    Plus,
     Trash2,
     Edit2,
+    Copy,
+    Target,
+    ImageIcon,
+    CheckSquare,
     Save,
     X,
+    Star,
     ChevronDown,
     ChevronUp,
-    Image as ImageIcon,
-    Loader2,
     AlertCircle,
-    Copy,
     Download,
     Upload,
-    CheckSquare,
     Square,
-    Check,
-    Star,
-    Target
+    Sparkles,
+    Plus,
+    Loader2
 } from 'lucide-react';
+import StyleOptionsSelector from './StyleOptionsSelector';
+import type { StyleOptions } from './StyleOptionsSelector';
 import { useStore } from '../store';
-import { generateImagePrompts, generateImage } from '../services/aiService';
+import { generateImagePrompts, generateImage, DEFAULT_NANOBANANA_GUIDELINES } from '../services/aiService';
 import type { ImagePrompt } from '../types';
+import ConfirmModal from './ConfirmModal';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { compressImage } from '../utils/imageUtils';
@@ -43,6 +45,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         deleteImagePrompt,
         loadImagePrompts,
         settings,
+        updateSettings,
         addMedia,
         articles,
         updateArticle
@@ -55,13 +58,44 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [isExpanded, setIsExpanded] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-    const [isProcessing, setIsProcessing] = useState(false); // Used for batch actions
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Form states
     const [newTitle, setNewTitle] = useState('');
     const [newPrompt, setNewPrompt] = useState('');
     const [editTitle, setEditTitle] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
+    const [customInstructions, setCustomInstructions] = useState('');
+    const [modelGuidelines, setModelGuidelines] = useState(DEFAULT_NANOBANANA_GUIDELINES);
+    const [showConfig, setShowConfig] = useState(false);
+    const [presetName, setPresetName] = useState('');
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
+
+    const DEFAULT_PRESETS = [
+        { name: 'Default', value: '', guidelines: DEFAULT_NANOBANANA_GUIDELINES },
+        { name: 'Cyberpunk', value: 'Cyberpunk aesthetic, neon lights, high tech low life, futuristic, vibrant purple and cyan accents.', guidelines: DEFAULT_NANOBANANA_GUIDELINES },
+        { name: 'Minimalist', value: 'Minimalist, clean lines, plenty of whitespace, simple geometric shapes, professional and modern.', guidelines: DEFAULT_NANOBANANA_GUIDELINES },
+        { name: 'Vintage', value: 'Vintage photography style, warm tones, film grain, nostalgic feel, faded colors.', guidelines: DEFAULT_NANOBANANA_GUIDELINES },
+        { name: 'Cinematic', value: 'Cinematic lighting, dramatic shadows, highly detailed textures, epic scale, 8k resolution.', guidelines: DEFAULT_NANOBANANA_GUIDELINES },
+        { name: 'Isometric', value: 'Isometric 3D illustration, cute stylization, bright colors, clay-like textures.', guidelines: DEFAULT_NANOBANANA_GUIDELINES }
+    ];
+
+    const allPresets = [
+        ...DEFAULT_PRESETS,
+        ...(settings.imageStylePresets || []).map(p => ({
+            name: p.name,
+            value: p.customInstructions,
+            guidelines: p.modelGuidelines,
+            id: p.id
+        }))
+    ];
 
     useEffect(() => {
         loadImagePrompts(articleId);
@@ -69,32 +103,64 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
     const filteredPrompts = imagePrompts
         .filter(p => p.articleId === articleId)
-        .sort((a, b) => {
-            // Requirement: Hero/Intro first, others in order.
-            // Since AI returns them in order, we should probably rely on a 'position' or just createdAt if added sequentially.
-            // For now, let's assume they are added in order.
-            return a.createdAt - b.createdAt;
-        });
+        .sort((a, b) => a.createdAt - b.createdAt);
 
     const handleGenerate = async () => {
         if (filteredPrompts.length > 0) {
-            if (!window.confirm('A set of image prompts already exists for this article. Do you want to overwrite them?')) {
-                return;
-            }
-            // Clear existing for this article before generating new ones
-            for (const p of filteredPrompts) {
-                await deleteImagePrompt(p.id);
-            }
+            setConfirmModal({
+                message: 'A set of image prompts already exists for this article. Do you want to overwrite them?',
+                confirmText: 'Overwrite',
+                onConfirm: async () => {
+                    setConfirmModal(null);
+                    for (const p of filteredPrompts) {
+                        await deleteImagePrompt(p.id);
+                    }
+                    performGenerate();
+                },
+                onCancel: () => setConfirmModal(null)
+            });
+            return;
         }
+        performGenerate();
+    };
 
+    const handleSaveAsPreset = async () => {
+        if (!presetName.trim()) return;
+
+        const newPreset = {
+            id: crypto.randomUUID(),
+            name: presetName.trim(),
+            customInstructions,
+            modelGuidelines,
+            createdAt: Date.now()
+        };
+
+        const updatedPresets = [...(settings.imageStylePresets || []), newPreset];
+        await updateSettings({ imageStylePresets: updatedPresets });
+        setPresetName('');
+    };
+
+    const handleDeletePreset = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const updatedPresets = (settings.imageStylePresets || []).filter(p => p.id !== id);
+        await updateSettings({ imageStylePresets: updatedPresets });
+    };
+
+    const handleStyleUpdate = (options: StyleOptions) => {
+        const parts = Object.values(options).filter(v => !!v);
+        if (parts.length > 0) {
+            setCustomInstructions(parts.join(', '));
+        }
+    };
+
+    const performGenerate = async () => {
         setIsGenerating(true);
         setError(null);
         try {
-            const { prompts: aiPrompts, error: aiError } = await generateImagePrompts(content, settings);
+            const { prompts: aiPrompts, error: aiError } = await generateImagePrompts(content, settings, customInstructions, modelGuidelines);
             if (aiError) {
                 setError(aiError);
             } else {
-                // Add prompts sequentially to maintain order via createdAt
                 for (let i = 0; i < aiPrompts.length; i++) {
                     const draft = aiPrompts[i];
                     await addImagePrompt({
@@ -102,7 +168,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         topic,
                         sectionTitle: draft.sectionTitle,
                         prompt: draft.prompt,
-                        createdAt: Date.now() + i, // Offset to ensure predictable order
+                        isHero: draft.isHero,
+                        createdAt: Date.now() + i,
                         updatedAt: Date.now() + i
                     });
                 }
@@ -153,31 +220,43 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm('Are you sure you want to delete this prompt?')) {
-            try {
-                await deleteImagePrompt(id);
-                setSelectedIds(prev => {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                });
-            } catch (err) {
-                setError('Failed to delete prompt.');
-            }
-        }
+        setConfirmModal({
+            message: 'Are you sure you want to delete this prompt?',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                setConfirmModal(null);
+                try {
+                    await deleteImagePrompt(id);
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        next.delete(id);
+                        return next;
+                    });
+                } catch (err) {
+                    setError('Failed to delete prompt.');
+                }
+            },
+            onCancel: () => setConfirmModal(null)
+        });
     };
 
     const handleClearAll = async () => {
-        if (window.confirm('Are you sure you want to delete ALL prompts for this article?')) {
-            try {
-                for (const p of filteredPrompts) {
-                    await deleteImagePrompt(p.id);
+        setConfirmModal({
+            message: 'Are you sure you want to delete ALL prompts for this article?',
+            confirmText: 'Clear All',
+            onConfirm: async () => {
+                setConfirmModal(null);
+                try {
+                    for (const p of filteredPrompts) {
+                        await deleteImagePrompt(p.id);
+                    }
+                    setSelectedIds(new Set());
+                } catch (err) {
+                    setError('Failed to clear all prompts.');
                 }
-                setSelectedIds(new Set());
-            } catch (err) {
-                setError('Failed to clear all prompts.');
-            }
-        }
+            },
+            onCancel: () => setConfirmModal(null)
+        });
     };
 
     const toggleSelect = (id: string) => {
@@ -198,57 +277,39 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     };
 
     const findHeaderIndex = (sectionTitle: string, articleContent: string): number => {
-        const escapeRegExp = (string: string) => {
-            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        };
-
+        const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const lowerTitle = sectionTitle.toLowerCase();
-
-        // Specific Hero Image handling: should go at the very top (gestalt)
         if (lowerTitle === 'hero image' || lowerTitle === 'hero') return 0;
-
         const escapedTitle = escapeRegExp(sectionTitle);
-
-        // 1. Try exact header match (case insensitive)
         const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
         const exactMatch = articleContent.match(exactRegex);
         if (exactMatch && exactMatch.index !== undefined) return exactMatch.index;
-
-        // 2. Try partial header match (header contains title)
         const partialRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
         const partialMatch = articleContent.match(partialRegex);
         if (partialMatch && partialMatch.index !== undefined) return partialMatch.index;
-
-        // 3. Fuzzy match: sanitize both and check inclusion
         const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
         const sanitizedTitle = sanitize(sectionTitle);
-
         const lines = articleContent.split('\n');
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (line.startsWith('#')) {
                 const sanitizedLine = sanitize(line.replace(/^#+\s+/, ''));
                 if (sanitizedLine.includes(sanitizedTitle) || sanitizedTitle.includes(sanitizedLine)) {
-                    // Find the index of this line in the original content
                     let currentPos = 0;
                     for (let j = 0; j < i; j++) {
-                        currentPos += lines[j].length + 1; // +1 for newline
+                        currentPos += lines[j].length + 1;
                     }
                     return currentPos;
                 }
             }
         }
-
         return -1;
     };
 
     const insertPromptAsQuote = async (prompt: ImagePrompt) => {
         const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
         const quote = `\n> **AI Image Prompt:** ${prompt.prompt}\n\n`;
-
-        const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') ||
-            prompt.sectionTitle.toLowerCase() === 'intro';
-
+        const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') || prompt.sectionTitle.toLowerCase() === 'intro';
         let newContent = content;
         if (headerIndex !== -1) {
             newContent = content.slice(0, headerIndex) + quote + content.slice(headerIndex);
@@ -257,7 +318,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         } else {
             newContent = content + quote;
         }
-
         onUpdateContent(newContent);
         await updateImagePrompt(prompt.id, { isPromptInserted: true });
     };
@@ -267,17 +327,12 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         setError(null);
         try {
             const result = await generateImage(prompt.prompt, settings);
-
             if (result.error) {
                 setError(result.error);
                 return;
             }
-
             if (result.imageUrl) {
-                // Compress image to ensure it fits in Firestore (< 1MB)
                 const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
-
-                // Add to Media Collection
                 await addMedia({
                     name: `Section-${prompt.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
                     type: 'image/jpeg',
@@ -285,22 +340,14 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     createdAt: Date.now(),
                     size: Math.round((compressedUrl.length * 3) / 4)
                 });
-
-                // Check for Hero Fallback
                 const article = articles.find(a => a.id === articleId);
                 const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-
                 if (!hasHero) {
                     await updateArticle(articleId, { heroImage: compressedUrl });
                 }
-
-                // Insert into Markdown
                 const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
-
-                const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') ||
-                    prompt.sectionTitle.toLowerCase() === 'intro';
-
+                const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') || prompt.sectionTitle.toLowerCase() === 'intro';
                 let newContent = content;
                 if (headerIndex !== -1) {
                     newContent = content.slice(0, headerIndex) + imageMarkdown + content.slice(headerIndex);
@@ -309,13 +356,11 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 } else {
                     newContent = content + imageMarkdown;
                 }
-
                 onUpdateContent(newContent);
                 await updateImagePrompt(prompt.id, { isImageInserted: true });
             }
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            setError(`Failed to generate image with NanoBanana: ${msg}`);
+            setError(`Failed to generate image with NanoBanana: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
         } finally {
             setProcessingIds(prev => {
@@ -330,9 +375,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         const timestamp = format(new Date(), 'yyyyMMdd-HHmmss');
         const defaultFilename = `imagePrompt-${timestamp}`;
         const userInput = window.prompt('Enter filename for backup (without .json):', defaultFilename);
-
-        if (userInput === null) return; // Cancelled
-
+        if (userInput === null) return;
         const filename = (userInput.trim() || defaultFilename) + '.json';
         const data = JSON.stringify(filteredPrompts, null, 2);
         const blob = new Blob([data], { type: 'application/json' });
@@ -349,18 +392,15 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target?.result as string);
                 if (Array.isArray(data)) {
                     for (const item of data) {
-                        // Create new entries (ignoring old IDs to avoid conflicts if restoring to different article, 
-                        // though here we link to current articleId)
                         await addImagePrompt({
                             articleId,
-                            topic: item.topic || topic, // Prefer imported topic, fallback to current
+                            topic: item.topic || topic,
                             sectionTitle: item.sectionTitle,
                             prompt: item.prompt,
                             createdAt: Date.now(),
@@ -407,7 +447,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         </div>
                     )}
 
-                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 mb-2">
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={handleGenerate}
@@ -416,6 +456,18 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             >
                                 {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                                 <span>Generate for All Sections</span>
+                            </button>
+                            <button
+                                onClick={() => setShowConfig(!showConfig)}
+                                className={clsx(
+                                    "px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border shadow-inner",
+                                    showConfig
+                                        ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                                        : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+                                )}
+                            >
+                                <Target size={18} />
+                                <span>Prompt Config</span>
                             </button>
                             <button
                                 onClick={() => setIsAdding(true)}
@@ -427,11 +479,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleBackup}
-                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800"
-                                title="Backup Prompts"
-                            >
+                            <button onClick={handleBackup} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800" title="Backup Prompts">
                                 <Download size={18} />
                             </button>
                             <label className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 cursor-pointer">
@@ -448,7 +496,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             {filteredPrompts.length > 0 && (
                                 <button
                                     onClick={handleClearAll}
-                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-slate-800"
+                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all border border-slate-800"
                                     title="Clear All Prompts"
                                 >
                                     <Trash2 size={18} />
@@ -457,11 +505,102 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         </div>
                     </div>
 
+                    {showConfig && (
+                        <div className="p-6 bg-slate-900 border border-slate-700 rounded-2xl space-y-8 shadow-2xl animate-in slide-in-from-top-4 duration-300 mb-6">
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Sparkles size={12} className="text-indigo-400" />
+                                    Visual Style Overrides
+                                </h4>
+                                <StyleOptionsSelector onUpdate={handleStyleUpdate} />
+                            </div>
+
+                            <div className="space-y-4 border-t border-slate-800 pt-6">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                        <Save size={12} className="text-emerald-400" />
+                                        Style Presets
+                                    </h4>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={presetName}
+                                            onChange={(e) => setPresetName(e.target.value)}
+                                            placeholder="New Preset Name..."
+                                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500/50 outline-none"
+                                        />
+                                        <button
+                                            onClick={handleSaveAsPreset}
+                                            disabled={!presetName.trim()}
+                                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            <Plus size={12} />
+                                            Save
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {allPresets.map((preset) => (
+                                        <div key={preset.name} className="relative group/preset">
+                                            <button
+                                                onClick={() => {
+                                                    setCustomInstructions(preset.value);
+                                                    setModelGuidelines(preset.guidelines);
+                                                }}
+                                                className={clsx(
+                                                    "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all",
+                                                    customInstructions === preset.value && modelGuidelines === preset.guidelines
+                                                        ? "bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)]"
+                                                        : "bg-slate-950 border border-slate-800 text-slate-500 hover:text-slate-300"
+                                                )}
+                                            >
+                                                {preset.name}
+                                            </button>
+                                            {('id' in preset && (preset as any).id) && (
+                                                <button
+                                                    onClick={(e) => handleDeletePreset((preset as any).id, e)}
+                                                    className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover/preset:opacity-100 transition-opacity hover:bg-red-700 shadow-lg"
+                                                >
+                                                    <X size={10} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 border-t border-slate-800 pt-6">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Custom Style Instructions</h4>
+                                    <button onClick={() => setCustomInstructions('')} className="text-[10px] text-slate-500 hover:text-white uppercase font-black">Clear</button>
+                                </div>
+                                <textarea
+                                    value={customInstructions}
+                                    onChange={(e) => setCustomInstructions(e.target.value)}
+                                    placeholder="Enter specific instructions..."
+                                    rows={3}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-300 font-mono focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-4 border-t border-slate-800 pt-6">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Model Guidelines</h4>
+                                    <button onClick={() => setModelGuidelines(DEFAULT_NANOBANANA_GUIDELINES)} className="text-[10px] text-indigo-400 hover:text-indigo-300 uppercase font-black">Reset</button>
+                                </div>
+                                <textarea
+                                    value={modelGuidelines}
+                                    onChange={(e) => setModelGuidelines(e.target.value)}
+                                    rows={3}
+                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-400 font-mono italic outline-none resize-none"
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {selectedIds.size > 0 && (
-                        <div className="mb-6 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-between animate-fade-in">
-                            <span className="text-sm text-indigo-300 font-medium">
-                                {selectedIds.size} Prompts Selected
-                            </span>
+                        <div className="mb-6 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-between animate-fade-in shadow-xl">
+                            <span className="text-sm text-indigo-300 font-medium">{selectedIds.size} Prompts Selected</span>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => {
@@ -477,9 +616,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     onClick={async () => {
                                         setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
-                                        for (const p of selected) {
-                                            await generateAndInsertImage(p);
-                                        }
+                                        for (const p of selected) await generateAndInsertImage(p);
                                         setIsProcessing(false);
                                         setSelectedIds(new Set());
                                     }}
@@ -491,10 +628,16 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                 </button>
                                 <button
                                     onClick={() => {
-                                        if (confirm(`Delete ${selectedIds.size} prompts?`)) {
-                                            selectedIds.forEach(id => deleteImagePrompt(id));
-                                            setSelectedIds(new Set());
-                                        }
+                                        setConfirmModal({
+                                            message: `Delete ${selectedIds.size} prompts?`,
+                                            confirmText: 'Delete',
+                                            onConfirm: async () => {
+                                                setConfirmModal(null);
+                                                for (const id of Array.from(selectedIds)) await deleteImagePrompt(id);
+                                                setSelectedIds(new Set());
+                                            },
+                                            onCancel: () => setConfirmModal(null)
+                                        });
                                     }}
                                     className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold rounded-lg flex items-center gap-2 border border-red-500/20"
                                 >
@@ -506,183 +649,104 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     )}
 
                     {isAdding && (
-                        <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700 rounded-xl animate-fade-in">
-                            <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-sm font-semibold text-slate-200">New Image Prompt</h4>
-                                <button onClick={() => setIsAdding(false)} className="text-slate-500 hover:text-white">
-                                    <X size={18} />
-                                </button>
+                        <div className="mb-6 p-6 bg-slate-800/30 border border-slate-700 rounded-2xl animate-in zoom-in-95 duration-200">
+                            <div className="flex justify-between items-center mb-6">
+                                <h4 className="text-lg font-bold text-slate-200">New Image Prompt</h4>
+                                <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Section Title</label>
-                                    <input
-                                        type="text"
-                                        value={newTitle}
-                                        onChange={(e) => setNewTitle(e.target.value)}
-                                        placeholder="e.g. Introduction, The Future of AI..."
-                                        className="input-field py-1.5"
-                                    />
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Section Title</label>
+                                    <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Introduction..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">NanoBanana Prompt</label>
-                                    <textarea
-                                        value={newPrompt}
-                                        onChange={(e) => setNewPrompt(e.target.value)}
-                                        placeholder="Enter the descriptive image prompt..."
-                                        rows={3}
-                                        className="input-field resize-none py-2"
-                                    />
+                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Prompt Description</label>
+                                    <textarea value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)} placeholder="Describe the image..." rows={4} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50 resize-none" />
                                 </div>
-                                <button
-                                    onClick={handleAddManual}
-                                    disabled={!newTitle || !newPrompt}
-                                    className="w-full btn-primary py-2 text-sm"
-                                >
-                                    Save Prompt
-                                </button>
+                                <button onClick={handleAddManual} disabled={!newTitle || !newPrompt} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20">Save Manual Prompt</button>
                             </div>
                         </div>
                     )}
 
                     <div className="space-y-4">
                         {filteredPrompts.length === 0 && !isAdding && (
-                            <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl bg-slate-900/30">
-                                <ImageIcon className="mx-auto text-slate-700 mb-3" size={32} />
-                                <p className="text-slate-500">No image prompts generated yet.</p>
-                                <p className="text-xs text-slate-600 mt-1">Use the AI to analyze your post and suggest images.</p>
+                            <div className="text-center py-16 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+                                <ImageIcon className="mx-auto text-slate-700 mb-4 opacity-50" size={48} />
+                                <p className="text-slate-400 font-medium">No image prompts yet.</p>
+                                <p className="text-xs text-slate-600 mt-2">Generate prompts from your content using AI.</p>
                             </div>
                         )}
 
                         {filteredPrompts.map((prompt) => {
                             const isSelected = selectedIds.has(prompt.id);
                             const isProcessingPrompt = processingIds.has(prompt.id);
-                            const isHero = prompt.sectionTitle.toLowerCase() === 'hero image' ||
-                                prompt.sectionTitle.toLowerCase() === 'hero';
+                            const isHero = prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image' || prompt.sectionTitle.toLowerCase() === 'hero';
 
                             return (
                                 <div
                                     key={prompt.id}
                                     className={clsx(
-                                        "group relative p-4 rounded-xl border transition-all cursor-pointer",
-                                        editingId === prompt.id
-                                            ? "bg-indigo-500/5 border-indigo-500/30 font-bold"
-                                            : isSelected
-                                                ? "bg-indigo-500/10 border-indigo-500/40 shadow-lg shadow-indigo-500/5"
-                                                : "bg-slate-800/30 border-slate-800 hover:border-slate-700",
-                                        isProcessingPrompt && "opacity-75"
+                                        "group relative p-5 rounded-2xl border transition-all cursor-pointer",
+                                        editingId === prompt.id ? "bg-indigo-500/5 border-indigo-500/40 font-bold" : isSelected ? "bg-indigo-500/10 border-indigo-500/40 shadow-lg shadow-indigo-500/5" : "bg-slate-800/40 border-slate-800/50 hover:bg-slate-800/60 hover:border-slate-700",
+                                        isProcessingPrompt && "opacity-75 blur-[0.5px]"
                                     )}
                                     onClick={() => !editingId && toggleSelect(prompt.id)}
                                 >
                                     {editingId === prompt.id ? (
                                         <div className="space-y-4" onClick={e => e.stopPropagation()}>
-                                            <div className="flex justify-between items-center">
-                                                <input
-                                                    type="text"
-                                                    value={editTitle}
-                                                    onChange={(e) => setEditTitle(e.target.value)}
-                                                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white w-full mr-4"
-                                                />
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => handleSaveEdit(prompt.id)} className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded">
-                                                        <Save size={18} />
-                                                    </button>
-                                                    <button onClick={() => setEditingId(null)} className="p-1 text-slate-400 hover:bg-slate-400/10 rounded">
-                                                        <X size={18} />
-                                                    </button>
+                                            <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded-xl border border-slate-700">
+                                                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="bg-transparent text-sm text-white w-full outline-none px-2" />
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => handleSaveEdit(prompt.id)} className="p-2 text-emerald-400 hover:bg-emerald-400/10 rounded-lg"><Save size={18} /></button>
+                                                    <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:bg-slate-400/10 rounded-lg"><X size={18} /></button>
                                                 </div>
                                             </div>
-                                            <textarea
-                                                value={editPrompt}
-                                                onChange={(e) => setEditPrompt(e.target.value)}
-                                                rows={2}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300 resize-none"
-                                            />
+                                            <textarea value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} rows={3} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-3 text-sm text-slate-300 resize-none outline-none focus:ring-1 focus:ring-indigo-500/30" />
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={clsx(
-                                                        "p-1 rounded-md border transition-colors",
-                                                        isSelected ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-700"
-                                                    )}>
-                                                        <CheckSquare size={14} />
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={clsx("p-1.5 rounded-lg border transition-all shadow-sm", isSelected ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-800")}>
+                                                        <CheckSquare size={16} />
                                                     </div>
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <h4 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                                                             {prompt.sectionTitle}
-                                                            {isHero && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-bold uppercase tracking-wider">
-                                                                    <Star size={10} className="fill-current" /> Hero
-                                                                </span>
-                                                            )}
-                                                            {prompt.isPromptInserted && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 leading-none">
-                                                                    <Check size={10} /> Prompt
-                                                                </span>
-                                                            )}
-                                                            {prompt.isImageInserted && (
-                                                                <span className="flex items-center gap-0.5 text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 leading-none">
-                                                                    <Check size={10} /> Image
-                                                                </span>
-                                                            )}
+                                                            {isHero && <span className="flex items-center gap-1 text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter"><Star size={8} className="fill-current" /> Hero</span>}
+                                                            {prompt.isPromptInserted && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-tighter">P-Inserted</span>}
+                                                            {prompt.isImageInserted && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold uppercase tracking-tighter">I-Inserted</span>}
                                                         </h4>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => handleStartEdit(prompt)}
-                                                        className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded transition-colors"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => insertPromptAsQuote(prompt)}
-                                                        className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-colors"
-                                                        title="Insert as Prompt"
-                                                    >
-                                                        <Copy size={16} />
-                                                    </button>
-                                                    {onJumpToSection && (
-                                                        <button
-                                                            onClick={() => onJumpToSection(prompt.sectionTitle)}
-                                                            className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded transition-colors"
-                                                            title="Jump to Section"
-                                                        >
-                                                            <Target size={16} />
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        onClick={() => generateAndInsertImage(prompt)}
-                                                        disabled={isProcessingPrompt}
-                                                        className="p-1 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded transition-colors disabled:opacity-50"
-                                                        title="Generate & Insert Image"
-                                                    >
-                                                        {isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(prompt.id)}
-                                                        className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                    <button onClick={() => handleStartEdit(prompt)} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
+                                                    <button onClick={() => insertPromptAsQuote(prompt)} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Insert Prompt"><Copy size={16} /></button>
+                                                    {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
+                                                    <button onClick={() => generateAndInsertImage(prompt)} disabled={isProcessingPrompt} className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50" title="Generate Image">{isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button>
+                                                    <button onClick={() => handleDelete(prompt.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={16} /></button>
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700 pl-3">
-                                                "{prompt.prompt}"
-                                            </p>
+                                            <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700/50 pl-4 py-1">"{prompt.prompt}"</p>
                                         </>
                                     )}
-                                </div >
+                                </div>
                             );
                         })}
-                    </div >
-                </div >
+                    </div>
+                </div>
             )}
-        </div >
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
+        </div>
     );
 };
 

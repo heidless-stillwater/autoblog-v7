@@ -4,6 +4,7 @@ import { generateTopics } from '../services/aiService';
 import { Zap, RefreshCcw, Sparkles } from 'lucide-react';
 
 import TopicExplorer from './TopicExplorer';
+import ConfirmModal from './ConfirmModal';
 
 interface TopicSelectorProps {
     onSelectTopic: (topic: string) => void;
@@ -35,6 +36,14 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
     const [seed, setSeed] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [showPresets, setShowPresets] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
 
     // Combine presets and user's custom seeds
     const allSeeds = Array.from(new Set([...PRESET_SEEDS, ...(settings.customSeeds || [])]));
@@ -43,13 +52,26 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
         if (!seed.trim()) return;
 
         if (!settings.geminiApiKey) {
-            alert('Please configure your Gemini API Key in Settings first.');
+            setConfirmModal({
+                message: 'Please configure your Gemini API Key in Settings first.',
+                confirmText: 'Go to Settings',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
             return;
         }
 
-        if (!confirm(`Generate 5 new topics for "${seed}" using AI? This will consume credits.`)) {
-            return;
-        }
+        setConfirmModal({
+            message: `Generate 5 new topics for "${seed}" using AI? This will consume credits.`,
+            onConfirm: () => {
+                setConfirmModal(null);
+                performGenerate();
+            },
+            onCancel: () => setConfirmModal(null)
+        });
+    };
+
+    const performGenerate = async () => {
 
         // Save as custom seed if not already in list
         if (!allSeeds.includes(seed)) {
@@ -62,7 +84,11 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
             const result = await generateTopics(seed, settings);
 
             if (result.error) {
-                alert(`Error generating topics: ${result.error}`);
+                setConfirmModal({
+                    message: `Error generating topics: ${result.error}`,
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             } else if (result.topics.length > 0) {
                 await addTopicSet({
                     seed: seed,
@@ -71,11 +97,19 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
                     generatedBy: 'ai'
                 });
             } else {
-                alert('No topics generated.');
+                setConfirmModal({
+                    message: 'No topics generated.',
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             }
         } catch (error) {
             console.error('Generation failed:', error);
-            alert('Failed to generate topics.');
+            setConfirmModal({
+                message: 'Failed to generate topics.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -93,13 +127,25 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
         }
 
         if (!targetSeed) {
-            alert('Please enter a seed or select a topic to refresh.');
+            setConfirmModal({
+                message: 'Please enter a seed or select a topic to refresh.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
             return;
         }
 
-        if (!confirm(`Refresh topics for "${targetSeed}"? This will generate new topics and replace existing ones.`)) {
-            return;
-        }
+        setConfirmModal({
+            message: `Refresh topics for "${targetSeed}"? This will generate new topics and replace existing ones.`,
+            onConfirm: () => {
+                setConfirmModal(null);
+                performRefresh(targetSeed);
+            },
+            onCancel: () => setConfirmModal(null)
+        });
+    };
+
+    const performRefresh = async (targetSeed: string) => {
 
         setIsGenerating(true);
         try {
@@ -112,7 +158,11 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
                     generatedBy: 'ai'
                 });
             } else if (result.error) {
-                alert(result.error);
+                setConfirmModal({
+                    message: result.error,
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             }
         } catch (error) {
             console.error('Refresh failed:', error);
@@ -215,6 +265,16 @@ const TopicSelector: React.FC<TopicSelectorProps> = ({
                     onBulkToggleTopic={onBulkToggleTopic}
                 />
             </div>
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
         </div>
     );
 };

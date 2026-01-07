@@ -12,6 +12,7 @@ import {
     RefreshCw
 } from 'lucide-react';
 import clsx from 'clsx';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Media = () => {
     const { media, addMedia, deleteMedia, posts } = useStore();
@@ -19,6 +20,14 @@ const Media = () => {
     const [dragActive, setDragActive] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const filteredMedia = media
@@ -135,9 +144,15 @@ const Media = () => {
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (confirm('Delete this image?')) {
-            await deleteMedia(id);
-        }
+        setConfirmModal({
+            message: 'Delete this image?',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                setConfirmModal(null);
+                await deleteMedia(id);
+            },
+            onCancel: () => setConfirmModal(null)
+        });
     };
 
     const handleDownload = (item: MediaItem, e: React.MouseEvent) => {
@@ -296,6 +311,16 @@ const Media = () => {
                 <div className="text-center py-12 text-slate-500">
                     No media files found.
                 </div>
+            )}
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
             )}
         </div>
     );

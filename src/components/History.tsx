@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { History as HistoryIcon, Trash2, ExternalLink, Clock, CheckCircle2, AlertCircle, Loader2, ArrowUpDown } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 import { format } from 'date-fns';
 
 const History: React.FC = () => {
@@ -8,7 +9,14 @@ const History: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [isClearing, setIsClearing] = useState(false);
     const [sortMode, setSortMode] = useState<'manual' | 'alpha' | 'chrono'>('manual');
-    const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void; onCancel?: () => void } | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
 
     const handleDelete = async (id: string) => {
         setConfirmModal({
@@ -20,7 +28,11 @@ const History: React.FC = () => {
                     await deleteGenHistory(id);
                 } catch (error) {
                     console.error('Failed to delete record:', error);
-                    alert('Failed to delete record');
+                    setConfirmModal({
+                        message: 'Failed to delete record',
+                        onConfirm: () => setConfirmModal(null),
+                        showCancel: false
+                    });
                 } finally {
                     setIsDeleting(null);
                 }
@@ -38,7 +50,11 @@ const History: React.FC = () => {
                     await clearGenHistory();
                 } catch (error) {
                     console.error('Failed to clear history:', error);
-                    alert('Failed to clear history');
+                    setConfirmModal({
+                        message: 'Failed to clear history',
+                        onConfirm: () => setConfirmModal(null),
+                        showCancel: false
+                    });
                 } finally {
                     setIsClearing(false);
                 }
@@ -213,44 +229,15 @@ const History: React.FC = () => {
                 </div>
             </div>
 
-            {/* Confirmation Modal */}
             {confirmModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div
-                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
-                        onClick={() => setConfirmModal(null)}
-                    />
-                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-                        <div className="p-6">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 shrink-0">
-                                    <AlertCircle size={24} />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-lg font-bold text-white mb-2">Confirm Action</h3>
-                                    <p className="text-sm text-slate-300">{confirmModal.message}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
-                            <button
-                                onClick={() => {
-                                    if (confirmModal.onCancel) confirmModal.onCancel();
-                                    setConfirmModal(null);
-                                }}
-                                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmModal.onConfirm}
-                                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
-                            >
-                                Confirm
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
             )}
         </>
     );

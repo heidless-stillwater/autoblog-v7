@@ -15,12 +15,21 @@ import {
 import { format } from 'date-fns';
 import clsx from 'clsx';
 import type { Post } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
 
 const PostList = () => {
     const { posts, deletePost, importPosts } = useStore();
     const [filter, setFilter] = useState<'all' | 'live' | 'draft'>('all');
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const filteredPosts = posts
@@ -50,12 +59,18 @@ const PostList = () => {
     };
 
     const handleDelete = (id: string) => {
-        if (confirm('Are you sure you want to delete this post?')) {
-            deletePost(id);
-            const newSelected = new Set(selectedIds);
-            newSelected.delete(id);
-            setSelectedIds(newSelected);
-        }
+        setConfirmModal({
+            message: 'Are you sure you want to delete this post?',
+            confirmText: 'Delete',
+            onConfirm: () => {
+                setConfirmModal(null);
+                deletePost(id);
+                const newSelected = new Set(selectedIds);
+                newSelected.delete(id);
+                setSelectedIds(newSelected);
+            },
+            onCancel: () => setConfirmModal(null)
+        });
     };
 
     // Backup: Download selected posts as JSON
@@ -88,13 +103,25 @@ const PostList = () => {
                     const validPosts = importedData.filter((p: any) => p.id && p.title && p.content);
                     if (validPosts.length > 0) {
                         importPosts(validPosts as Post[]);
-                        alert(`Successfully restored ${validPosts.length} posts.`);
+                        setConfirmModal({
+                            message: `Successfully restored ${validPosts.length} posts.`,
+                            onConfirm: () => setConfirmModal(null),
+                            showCancel: false
+                        });
                     } else {
-                        alert('No valid posts found in file.');
+                        setConfirmModal({
+                            message: 'No valid posts found in file.',
+                            onConfirm: () => setConfirmModal(null),
+                            showCancel: false
+                        });
                     }
                 }
             } catch (err) {
-                alert('Failed to parse backup file.');
+                setConfirmModal({
+                    message: 'Failed to parse backup file.',
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             }
             if (fileInputRef.current) fileInputRef.current.value = '';
         };
@@ -261,6 +288,17 @@ const PostList = () => {
                     ))
                 )}
             </div>
+
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
         </div>
     );
 };

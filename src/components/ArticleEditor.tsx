@@ -21,6 +21,7 @@ import ResearchSelector from './ResearchSelector';
 import type { Article, ArticleVersion, PerplexityPrompt, MediaItem } from '../types';
 import { Trash2, MoveUp, MoveDown, Image as ImageIcon } from 'lucide-react';
 import MediaSelectorModal from './MediaSelectorModal';
+import ConfirmModal from './ConfirmModal';
 
 interface Block {
     id: string;
@@ -60,6 +61,14 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     const [scheduleDate, setScheduleDate] = useState(
         article.scheduleDate ? new Date(article.scheduleDate).toISOString().slice(0, 16) : ''
     );
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
 
     // Track active text block and cursor position for media insertion
     const activeBlockRef = useRef<{ id: string; start: number; end: number } | null>(null);
@@ -189,11 +198,20 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
     const handleRegenerate = async (research: PerplexityPrompt | null) => {
         if (!research) {
-            if (!confirm('Generate a new version of this article? This will use your Perplexity API credits.')) {
-                return;
-            }
+            setConfirmModal({
+                message: 'Generate a new version of this article? This will use your Perplexity API credits.',
+                onConfirm: () => {
+                    setConfirmModal(null);
+                    performRegenerate(research);
+                },
+                onCancel: () => setConfirmModal(null)
+            });
+            return;
         }
+        performRegenerate(research);
+    };
 
+    const performRegenerate = async (research: PerplexityPrompt | null) => {
         setIsRegenerating(true);
         try {
             const cachedResearch = research ? {
@@ -204,7 +222,11 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             const result = await generateWithResearch(article.topic, settings, cachedResearch);
 
             if (result.error) {
-                alert(`Error: ${result.error}`);
+                setConfirmModal({
+                    message: `Error: ${result.error}`,
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
                 return;
             }
 
@@ -233,10 +255,18 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
                 await addArticleVersion(article.id, newVersion);
                 setCurrentVersionId(newVersionId);
-                alert('New version generated successfully!');
+                setConfirmModal({
+                    message: 'New version generated successfully!',
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             }
         } catch (error) {
-            alert('Failed to generate new version. Please try again.');
+            setConfirmModal({
+                message: 'Failed to generate new version. Please try again.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsRegenerating(false);
         }
@@ -256,10 +286,20 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 attachments: [],
             });
 
-            alert('Article published to Posts as draft!');
-            navigate('/posts');
+            setConfirmModal({
+                message: 'Article published to Posts as draft!',
+                onConfirm: () => {
+                    setConfirmModal(null);
+                    navigate('/posts');
+                },
+                showCancel: false
+            });
         } catch (error) {
-            alert('Failed to publish article. Please try again.');
+            setConfirmModal({
+                message: 'Failed to publish article. Please try again.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         }
     };
 
@@ -269,7 +309,11 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             status: scheduleDate ? 'scheduled' : 'draft'
         };
         await updateArticle(article.id, updates);
-        alert('Schedule updated!');
+        setConfirmModal({
+            message: 'Schedule updated!',
+            onConfirm: () => setConfirmModal(null),
+            showCancel: false
+        });
     };
 
     const handleUpdateContent = (newContent: string) => {
@@ -333,10 +377,18 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         setIsRefreshing(true);
         try {
             await syncHeroImages([article.id], true); // Force sync for individual article
-            alert('Hero image synced from content!');
+            setConfirmModal({
+                message: 'Hero image synced from content!',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } catch (error) {
             console.error('Sync hero failed:', error);
-            alert('Failed to sync hero image.');
+            setConfirmModal({
+                message: 'Failed to sync hero image.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsRefreshing(false);
         }
@@ -796,6 +848,16 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                     </div>
                 )}
             </div>
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
         </div>
     );
 };

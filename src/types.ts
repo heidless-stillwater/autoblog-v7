@@ -20,6 +20,14 @@ export interface MediaItem {
     size: number;
 }
 
+export interface ImageStylePreset {
+    id: string;
+    name: string;
+    customInstructions: string;
+    modelGuidelines: string;
+    createdAt: number;
+}
+
 export interface Settings {
     siteTitle: string;
     tagline: string;
@@ -37,6 +45,7 @@ export interface Settings {
     customSeeds?: string[];
     topicQueue?: string[];
     queueProcessInterval?: number; // In minutes
+    imageStylePresets?: ImageStylePreset[];
 }
 
 export type ToolCategory = 'debater' | 'muse' | 'analyst';
@@ -94,6 +103,7 @@ export interface ImagePrompt {
     updatedAt: number;
     isPromptInserted?: boolean;
     isImageInserted?: boolean;
+    isHero?: boolean;
 }
 
 export interface User {

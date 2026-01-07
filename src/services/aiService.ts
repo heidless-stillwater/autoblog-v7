@@ -595,33 +595,48 @@ ${content}
 export interface ImagePromptDraft {
     sectionTitle: string;
     prompt: string;
+    isHero?: boolean;
 }
+
+export const DEFAULT_NANOBANANA_GUIDELINES = `For each identified section, create a high-fidelity, photorealistic image generation prompt for NanoBanana. 
+Focus on:
+- **Composition**: Use intentional framing (rule of thirds, leading lines), specify perspective (low angle, wide shot, extreme close-up).
+- **Lighting**: Specify cinematic lighting (golden hour, volumetric fog, rim lighting, moody noir, or high-key professional).
+- **Style**: Modern, premium aesthetic with deep contrast and vibrant but realistic color grading.
+- **Detail**: Include technical camera terms (85mm lens, f/1.8, high dynamic range) and specific textures.
+Each prompt should be a vivid, self-contained scene description. Avoid buzzwords like "photorealistic" in the prompt itself; instead, describe the light, texture, and lens effects that imply it.`;
 
 /**
  * Generates image prompts for major blog sections using Gemini
  */
-export const generateImagePrompts = async (content: string, settings: Settings, customInstructions?: string): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
+export const generateImagePrompts = async (content: string, settings: Settings, customInstructions?: string, modelGuidelines?: string): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
     if (!settings.geminiApiKey) {
         return { prompts: [], error: 'Gemini API Key is missing. Please add it in Settings.' };
     }
 
+    const guidelines = modelGuidelines || DEFAULT_NANOBANANA_GUIDELINES;
+
     const promptText = `Analyze the following blog post and identify EXACTLY 8 major sections (including introduction, conclusion, and key subsections). 
-For each identified section, create a highly detailed, photorealistic image generation prompt for NanoBanana.
 
-Rules:
-1. The VERY FIRST prompt must be a sophisticated, high-impact prompt for the **HERO IMAGE**. It should not be tied to a specific section but should instead encapsulate the **gestalt** (the overall mood, theme, and essence) of the entire article. Use "Hero Image" as the sectionTitle for this first entry.
-2. For the subsequent 7 entries, use the EXACT text of the section's header from the markdown as the "sectionTitle". If a section doesn't have a clear header, identify the most representative visual break.
-3. Limit to exactly 8 prompts total.
-4. Each prompt should be a vivid description of a scene or concept, suitable for high-quality AI image generation.
-5. Output ONLY a clean JSON array of objects with keys: "sectionTitle" and "prompt".
+    ${guidelines}
 
-${customInstructions ? `SPECIFIC STYLE & CONTEXT INSTRUCTIONS:
-${customInstructions}
-` : ''}
+    ${customInstructions ? `Additional User Instructions: ${customInstructions}` : ''}
 
-Blog Post Content:
-${content}
-`;
+    For each section, provide:
+    1. A short, descriptive "sectionTitle".
+    2. A highly detailed image generation prompt (approx 60-100 words).
+    3. Rationale: Why this visual represents this specific section.
+    
+    CRITICAL CONSTRAINT: One of these 8 prompts MUST be the "Hero" prompt. 
+    The "Hero" visual should NOT just be a literal scene from the text, but a 'gestalt' interpretation—a high-impact conceptual visual that captures the soul and central theme of the entire article. Mark this one as "isHero: true".
+
+    Return ONLY a JSON object. No markdown formatting.
+
+    Post Content:
+    ${content}
+
+    Format your response as a JSON object with a "prompts" array. Each object in the array should have fields: "sectionTitle", "prompt", "rationale", and "isHero" (boolean).
+    `;
 
     try {
         const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {

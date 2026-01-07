@@ -8,6 +8,7 @@ import PostPreviewModal from '../components/PostPreviewModal';
 import AIModal from '../components/AIModal';
 import { generatePostContent } from '../services/aiService';
 import clsx from 'clsx';
+import ConfirmModal from '../components/ConfirmModal';
 
 const PostEditor = () => {
     const { id } = useParams();
@@ -23,6 +24,14 @@ const PostEditor = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
 
     useEffect(() => {
         if (id) {
@@ -100,19 +109,35 @@ const PostEditor = () => {
 
         setIsGenerating(false);
         if (result.error) {
-            alert(result.error);
+            setConfirmModal({
+                message: result.error,
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } else {
-            if (result.content && confirm('Content generated! Replace current editor content?')) {
-                setContent(result.content);
-                setTitle(prev => prev || `Post about ${topic}`);
-                setIsAIModalOpen(false);
+            if (result.content) {
+                setConfirmModal({
+                    message: 'Content generated! Replace current editor content?',
+                    confirmText: 'Replace',
+                    onConfirm: () => {
+                        setConfirmModal(null);
+                        setContent(result.content!);
+                        setTitle(prev => prev || `Post about ${topic}`);
+                        setIsAIModalOpen(false);
+                    },
+                    onCancel: () => setConfirmModal(null)
+                });
             }
         }
     };
 
     const confirmAI = () => {
         if (!useStore.getState().settings.perplexityApiKey) {
-            alert('Please configure your Perplexity API Key in Settings first.');
+            setConfirmModal({
+                message: 'Please configure your Perplexity API Key in Settings first.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
             return;
         }
         setIsAIModalOpen(true);
@@ -248,6 +273,17 @@ const PostEditor = () => {
                 onGenerate={handleAIGenerate}
                 isLoading={isGenerating}
             />
+
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
         </div>
     );
 };

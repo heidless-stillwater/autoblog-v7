@@ -111,6 +111,7 @@ const defaultSettings: Settings = {
     customSeeds: [],
     topicQueue: [],
     queueProcessInterval: 1,
+    imageStylePresets: [],
 };
 
 export const useStore = create<AppState>()((set, get) => ({

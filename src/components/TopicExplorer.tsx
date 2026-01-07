@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { ChevronRight, ChevronDown, Folder, FileText, Download, Upload, Trash2 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 
 interface TopicExplorerProps {
@@ -20,6 +21,14 @@ const TopicExplorer: React.FC<TopicExplorerProps> = ({
 }) => {
     const { topicSets, deleteTopicSet, importTopicSets } = useStore();
     const [expandedSeeds, setExpandedSeeds] = useState<Set<string>>(new Set());
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
 
     const toggleSeed = (seedId: string) => {
         const newExpanded = new Set(expandedSeeds);
@@ -52,13 +61,25 @@ const TopicExplorer: React.FC<TopicExplorerProps> = ({
                 const parsed = JSON.parse(content);
                 if (Array.isArray(parsed)) {
                     await importTopicSets(parsed);
-                    alert('Topic sets restored successfully!');
+                    setConfirmModal({
+                        message: 'Topic sets restored successfully!',
+                        onConfirm: () => setConfirmModal(null),
+                        showCancel: false
+                    });
                 } else {
-                    alert('Invalid file format. Expected a JSON array.');
+                    setConfirmModal({
+                        message: 'Invalid file format. Expected a JSON array.',
+                        onConfirm: () => setConfirmModal(null),
+                        showCancel: false
+                    });
                 }
             } catch (error) {
                 console.error('Error importing:', error);
-                alert('Failed to parse backup file.');
+                setConfirmModal({
+                    message: 'Failed to parse backup file.',
+                    onConfirm: () => setConfirmModal(null),
+                    showCancel: false
+                });
             }
         };
         reader.readAsText(file);
@@ -158,7 +179,18 @@ const TopicExplorer: React.FC<TopicExplorerProps> = ({
                                     )}
 
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); deleteTopicSet(ts.id); }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setConfirmModal({
+                                                message: `Are you sure you want to delete the topic set "${ts.seed}"?`,
+                                                confirmText: 'Delete',
+                                                onConfirm: () => {
+                                                    setConfirmModal(null);
+                                                    deleteTopicSet(ts.id);
+                                                },
+                                                onCancel: () => setConfirmModal(null)
+                                            });
+                                        }}
                                         className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
                                     >
                                         <Trash2 size={12} />
@@ -203,6 +235,16 @@ const TopicExplorer: React.FC<TopicExplorerProps> = ({
                     </div>
                 ))}
             </div>
+            {confirmModal && (
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={confirmModal.onCancel}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                    showCancel={confirmModal.showCancel}
+                />
+            )}
         </div>
     );
 };
