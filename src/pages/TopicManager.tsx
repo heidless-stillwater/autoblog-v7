@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import AutoBlogGenerator from '../components/AutoBlogGenerator';
+import ResearchToolSelector from '../components/ResearchToolSelector';
 import TopicQueue from '../components/TopicQueue';
 import TopicSelector from '../components/TopicSelector';
 import { format } from 'date-fns';
 import { Sparkles, FileText, Zap, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import type { ResearchTool } from '../types';
+import { generateWithResearch } from '../services/aiService';
 import TopicQueueProgress from '../components/TopicQueueProgress';
 import type { LogEntry } from '../components/TopicQueueProgress';
 import History from '../components/History';
@@ -29,7 +32,9 @@ const TopicManager = () => {
         addGenHistory,
         updateGenHistory,
         loadGenHistory,
-        genHistory
+        genHistory,
+        addArticle,
+        addResearch
     } = useStore();
 
     // Default genDate to NOW in local YYYY-MM-DDTHH:mm format
@@ -43,7 +48,7 @@ const TopicManager = () => {
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     });
 
-    const [view, setView] = useState<'topic-selection' | 'article-generation' | 'batch-generation'>('topic-selection');
+    const [view, setView] = useState<'topic-selection' | 'article-generation' | 'batch-generation' | 'tool-selection-batch'>('topic-selection');
     const [selectedTopic, setSelectedTopic] = useState<string>();
     const [topicQueue, setTopicQueue] = useState<string[]>([]);
     const [batchProgress, setBatchProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
@@ -127,16 +132,22 @@ const TopicManager = () => {
             return;
         }
 
+        setView('tool-selection-batch');
+    };
+
+    const handleBatchToolSelect = (tool: ResearchTool) => {
+        const topicsToGen = topicQueue.filter(topic => !articles.some(a => a.topic === topic));
         setConfirmModal({
-            message: `Generate ${topicsToGen.length} articles? This will take some time and use API credits.`,
+            message: `Generate ${topicsToGen.length} articles using ${tool.toUpperCase()}? This will use API credits.`,
             onConfirm: () => {
                 setConfirmModal(null);
-                proceedWithGeneration();
-            }
+                proceedWithGeneration(tool);
+            },
+            onCancel: () => setView('topic-selection')
         });
     };
 
-    const proceedWithGeneration = async () => {
+    const proceedWithGeneration = async (tool: ResearchTool = 'perplexity') => {
         const topicsToGen = topicQueue.filter(topic => !articles.some(a => a.topic === topic));
 
         setView('batch-generation');
@@ -225,26 +236,68 @@ const TopicManager = () => {
                 setBatchProgress(prev => ({
                     ...prev,
                     current: i + 1,
-                    status: `Processing ${topic} : ${timestamp}`
+                    status: `Researching & Generating ${topic} : ${timestamp}`
                 }));
 
-                // 3-second pause as requested
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                try {
+                    // ACTUALLY GENERATE
+                    const result = await generateWithResearch(topic, settings, undefined, tool);
 
-                // Simulating processing complete
-                setLogs(prev => prev.map(l => l.topic === topic ? { ...l, status: 'completed' } : l));
+                    if (result.error) {
+                        throw new Error(result.error);
+                    }
 
-                // Update history record
-                await updateGenHistory(historyId, {
-                    topicState: 'completed',
-                    processDateTime: Date.now(),
-                    topicArticleURL: `/admin/articles/${topic.replace(/\s+/g, '-').toLowerCase()}` // Simulated link
-                });
+                    // Save research first
+                    const researchId = await addResearch({
+                        topic,
+                        prompt: result.researchPrompt || '',
+                        response: result.researchResponse || '',
+                        revisionId: 1,
+                        createdAt: Date.now()
+                    });
 
-                // Remove from queue as requested
-                const currentQueue = useStore.getState().settings.topicQueue || [];
-                const updatedQueue = currentQueue.filter(t => t !== topic);
-                await updateQueue(updatedQueue);
+                    // Save the article
+                    const versionId = crypto.randomUUID();
+                    await addArticle({
+                        topic,
+                        status: 'draft',
+                        heroImage: '',
+                        currentVersionId: versionId,
+                        versions: [{
+                            id: versionId,
+                            title: topic,
+                            content: result.content,
+                            researchId,
+                            generatedBy: 'ai',
+                            createdAt: Date.now()
+                        }],
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    });
+
+                    // Update logs
+                    setLogs(prev => prev.map(l => l.topic === topic ? { ...l, status: 'completed' } : l));
+
+                    // Update history record
+                    await updateGenHistory(historyId, {
+                        topicState: 'completed',
+                        processDateTime: Date.now(),
+                        topicArticleURL: `/admin/articles/${topic.replace(/\s+/g, '-').toLowerCase()}`
+                    });
+
+                    // Remove from queue as requested
+                    const currentQueue = useStore.getState().settings.topicQueue || [];
+                    const updatedQueue = currentQueue.filter(t => t !== topic);
+                    await updateQueue(updatedQueue);
+
+                } catch (err: any) {
+                    console.error(`Failed to generate ${topic}:`, err);
+                    setLogs(prev => prev.map(l => l.topic === topic ? { ...l, status: 'error', message: err.message } : l));
+                    await updateGenHistory(historyId, {
+                        topicState: 'error',
+                        processDateTime: Date.now()
+                    });
+                }
             }
         } else {
             setBatchProgress(prev => ({ ...prev, status: `Scheduled for ${format(genDateObj, 'MMM d, HH:mm')}` }));
@@ -374,6 +427,12 @@ const TopicManager = () => {
                     <AutoBlogGenerator
                         onComplete={() => navigate('/admin/articles')}
                         initialTopic={selectedTopic}
+                    />
+                ) : view === 'tool-selection-batch' ? (
+                    <ResearchToolSelector
+                        settings={settings}
+                        onSelect={handleBatchToolSelect}
+                        onCancel={() => setView('topic-selection')}
                     />
                 ) : (
                     <div className="flex flex-col items-center justify-center py-20 space-y-8 animate-fade-in">

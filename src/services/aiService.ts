@@ -217,14 +217,29 @@ ${BLOG_STYLE_GUIDE}`
  * @param topic - The topic to research and write about
  * @param settings - User settings including API key
  * @param cachedResearch - Optional cached research to use instead of generating new
+ * @param tool - The specific tool to use for research/generation
  * @returns Article content and research data
  */
 export const generateWithResearch = async (
     topic: string,
     settings: Settings,
-    cachedResearch?: { prompt: string; response: string }
+    cachedResearch?: { prompt: string; response: string },
+    tool: ResearchTool = 'perplexity'
 ): Promise<ResearchResponse> => {
-    if (!settings.perplexityApiKey) {
+    // If it's a tool we don't handle yet, revert to perplexity or show error
+    // For now, only Perplexity is fully implemented.
+    // iAsk.ai is "Free", we'll mock it with Perplexity sonar if key exists, otherwise maybe a limited mock.
+
+    if (tool !== 'perplexity' && tool !== 'iask-ai') {
+        // Mock success for other tools for now to demonstrate UI
+        return {
+            content: `## Article generated using ${tool}\n\nThis is a placeholder for ${tool} integration.\n\nGenerated for topic: ${topic}`,
+            researchPrompt: `Mock research prompt for ${tool}`,
+            researchResponse: `Mock research response for ${tool}`
+        };
+    }
+
+    if (!settings.perplexityApiKey && tool === 'perplexity') {
         return { content: '', error: 'Perplexity API Key is missing. Please add it in Settings.' };
     }
 

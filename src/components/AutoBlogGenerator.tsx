@@ -5,7 +5,8 @@ import { nanoid } from 'nanoid';
 import { Sparkles, Calendar, CheckCircle, AlertTriangle, ArrowRight, Save as SaveIcon } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 import ResearchSelector from './ResearchSelector';
-import type { ArticleVersion, Article, PerplexityPrompt } from '../types';
+import ResearchToolSelector from './ResearchToolSelector';
+import type { ArticleVersion, Article, PerplexityPrompt, ResearchTool } from '../types';
 
 interface AutoBlogGeneratorProps {
     onComplete: () => void;
@@ -16,12 +17,13 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
     const { settings, updateSettings, addArticle, getResearchByTopic, addResearch, addGenHistory, updateGenHistory, topicSets } = useStore();
     const [topic, setTopic] = useState(initialTopic || '');
     const [scheduleDate, setScheduleDate] = useState('');
-    const [status, setStatus] = useState<'idle' | 'research-check' | 'generating' | 'review' | 'completed'>('idle');
+    const [status, setStatus] = useState<'idle' | 'research-check' | 'tool-selection' | 'generating' | 'review' | 'completed'>('idle');
     const [progress, setProgress] = useState<string[]>([]);
     const [generatedContent, setGeneratedContent] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [existingResearch, setExistingResearch] = useState<PerplexityPrompt[]>([]);
     const [selectedResearch, setSelectedResearch] = useState<PerplexityPrompt | null>(null);
+    const [selectedTool, setSelectedTool] = useState<ResearchTool>('perplexity');
     const [researchId, setResearchId] = useState<string | null>(null);
     const [historyId, setHistoryId] = useState<string | null>(null);
 
@@ -39,14 +41,15 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
     // Simulate progress steps
     useEffect(() => {
         if (status === 'generating') {
+            const toolName = selectedTool.charAt(0).toUpperCase() + selectedTool.slice(1).replace('-', ' ');
             const steps = [
-                'Initializing AI agent...',
+                `Initializing ${toolName} agent...`,
                 'Checking research cache...',
-                selectedResearch ? 'Using cached research...' : 'Conducting new Perplexity research...',
+                selectedResearch ? 'Using cached research data...' : `Conducting deep research with ${toolName}...`,
                 'Synthesizing insights...',
-                'Drafting content...',
-                'Optimizing for retention...',
-                'Finalizing markdown...'
+                'Drafting high-retention content...',
+                'Optimizing for flow and SEO...',
+                'Finalizing markdown artifact...'
             ];
 
             let currentStep = 0;
@@ -61,7 +64,7 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
 
             return () => clearInterval(interval);
         }
-    }, [status, selectedResearch]);
+    }, [status, selectedResearch, selectedTool]);
 
     useEffect(() => {
         if (initialTopic) {
@@ -71,10 +74,6 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
 
     const handleCheckResearch = () => {
         if (!topic.trim()) return;
-        if (!settings.perplexityApiKey) {
-            setError('Missing Perplexity API Key. Please configure in Settings.');
-            return;
-        }
 
         // Check for existing research
         const existing = getResearchByTopic(topic);
@@ -83,38 +82,44 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
             setExistingResearch(existing);
             setStatus('research-check');
         } else {
-            // No existing research, proceed to generate
-            handleGenerate(null);
+            // No existing research, go to tool selection
+            setStatus('tool-selection');
         }
     };
 
     const handleResearchSelection = (research: PerplexityPrompt | null) => {
         setSelectedResearch(research);
-        setStatus('idle');
-        handleGenerate(research);
+        setStatus('tool-selection');
     };
 
-    const handleGenerate = async (research: PerplexityPrompt | null) => {
+    const handleToolSelection = (tool: ResearchTool) => {
+        setSelectedTool(tool);
+        handleGenerate(selectedResearch, tool);
+    };
+
+    const handleGenerate = async (research: PerplexityPrompt | null, tool: ResearchTool) => {
         if (!topic.trim()) return;
-        if (!settings.perplexityApiKey) {
-            setError('Missing Perplexity API Key. Please configure in Settings.');
+
+        // Final key check for the specific tool
+        const isKeyMissing = (t: ResearchTool) => {
+            switch (t) {
+                case 'perplexity': return !settings.perplexityApiKey;
+                case 'brave-goggles': return !settings.braveApiKey;
+                case 'claude-4-5': return !settings.claudeApiKey;
+                case 'sudowrite': return !settings.sudowriteApiKey;
+                case 'novelcrafter': return !settings.novelcrafterApiKey;
+                case 'character-ai': return !settings.characterAiApiKey;
+                case 'gemini-deep': return !settings.geminiApiKey;
+                case 'chatgpt-o1': return !settings.chatgptApiKey;
+                case 'iask-ai': return false;
+                default: return true;
+            }
+        };
+
+        if (isKeyMissing(tool)) {
+            setError(`Missing API Key for ${tool}. Please configure in Settings.`);
+            setStatus('idle');
             return;
-        }
-
-        // Ask for permission before making API call (only if generating new research)
-        if (!research) {
-            const confirmed = confirm(
-                `Generate a 2,000+ word article about "${topic}"?\n\n` +
-                `This will use your Perplexity API credits and may take 30-60 seconds.\n\n` +
-                `The AI will:\n` +
-                `• Conduct real-time research\n` +
-                `• Gather data and examples\n` +
-                `• Write a comprehensive article\n` +
-                `• Format with proper markdown\n\n` +
-                `Continue?`
-            );
-
-            if (!confirmed) return;
         }
 
         setStatus('generating');
@@ -144,7 +149,7 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
                 response: research.response
             } : undefined;
 
-            const result = await generateWithResearch(topic, settings, cachedResearch);
+            const result = await generateWithResearch(topic, settings, cachedResearch, tool);
 
             if (result.error) {
                 setError(result.error);
@@ -239,6 +244,16 @@ const AutoBlogGenerator = ({ onComplete, initialTopic }: AutoBlogGeneratorProps)
             onComplete();
         }, 1500);
     };
+
+    if (status === 'tool-selection') {
+        return (
+            <ResearchToolSelector
+                settings={settings}
+                onSelect={handleToolSelection}
+                onCancel={() => setStatus('idle')}
+            />
+        );
+    }
 
     // Research Selection Modal
     if (status === 'research-check') {

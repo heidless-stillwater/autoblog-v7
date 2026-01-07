@@ -25,12 +25,25 @@ export interface Settings {
     tagline: string;
     perplexityApiKey: string;
     geminiApiKey: string;
+    braveApiKey?: string;
+    claudeApiKey?: string;
+    sudowriteApiKey?: string;
+    novelcrafterApiKey?: string;
+    characterAiApiKey?: string;
+    chatgptApiKey?: string;
+    iaskAiApiKey?: string;
     perplexityModel: 'sonar' | 'sonar-reasoning' | 'sonar-deep-research';
     theme: 'light' | 'dark' | 'system';
     customSeeds?: string[];
     topicQueue?: string[];
     queueProcessInterval?: number; // In minutes
 }
+
+export type ToolCategory = 'debater' | 'muse' | 'analyst';
+export type ResearchTool =
+    | 'perplexity' | 'brave-goggles' | 'claude-4-5'
+    | 'sudowrite' | 'novelcrafter' | 'character-ai'
+    | 'gemini-deep' | 'chatgpt-o1' | 'iask-ai';
 
 export interface PerplexityPrompt {
     id: string;

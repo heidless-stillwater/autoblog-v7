@@ -21,9 +21,17 @@ export const apiProxy = onRequest({ cors: true }, async (req, res) => {
             targetUrl = `https://api.perplexity.ai${pathRemaining}`;
         } else if (req.path.startsWith("/api/gemini")) {
             pathRemaining = req.path.replace("/api/gemini", "");
-            // Handle Gemini query params (API key)
             const queryString = req.url.split('?')[1] || "";
             targetUrl = `https://generativelanguage.googleapis.com${pathRemaining}${queryString ? `?${queryString}` : ""}`;
+        } else if (req.path.startsWith("/api/claude")) {
+            pathRemaining = req.path.replace("/api/claude", "");
+            targetUrl = `https://api.anthropic.com${pathRemaining}`;
+        } else if (req.path.startsWith("/api/openai")) {
+            pathRemaining = req.path.replace("/api/openai", "");
+            targetUrl = `https://api.openai.com${pathRemaining}`;
+        } else if (req.path.startsWith("/api/brave")) {
+            pathRemaining = req.path.replace("/api/brave", "");
+            targetUrl = `https://api.search.brave.com${pathRemaining}`;
         } else {
             res.status(404).json({ error: "Unknown proxy target" });
             return;
