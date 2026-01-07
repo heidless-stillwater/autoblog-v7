@@ -374,9 +374,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const handleBackup = () => {
         const timestamp = format(new Date(), 'yyyyMMdd-HHmmss');
         const defaultFilename = `imagePrompt-${timestamp}`;
-        const userInput = window.prompt('Enter filename for backup (without .json):', defaultFilename);
-        if (userInput === null) return;
-        const filename = (userInput.trim() || defaultFilename) + '.json';
+        const filename = defaultFilename + '.json';
         const data = JSON.stringify(filteredPrompts, null, 2);
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

@@ -102,7 +102,7 @@ const ResearchToolSelector: React.FC<ResearchToolSelectorProps> = ({ settings, o
                         <div key={category.id} className="space-y-4">
                             <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
                                 {category.icon}
-                                <h3 className={`font - bold uppercase tracking - wider text - xs ${category.color} `}>
+                                <h3 className={`font-bold uppercase tracking-wider text-xs ${category.color}`}>
                                     {category.name}
                                 </h3>
                             </div>
@@ -115,17 +115,15 @@ const ResearchToolSelector: React.FC<ResearchToolSelectorProps> = ({ settings, o
                                             key={tool.id}
                                             disabled={!isReady}
                                             onClick={() => onSelect(tool.id)}
-                                            className={`
-w - full text - left p - 4 rounded - xl border - 2 transition - all flex flex - col gap - 1 group
+                                            className={`w-full text-left p-4 rounded-xl border-2 transition-all flex flex-col gap-1 group
                                                 ${isReady
                                                     ? 'border-slate-800 bg-slate-800/30 hover:border-indigo-500 hover:bg-indigo-500/5 cursor-pointer'
                                                     : 'border-slate-800/50 bg-slate-900/50 opacity-40 cursor-not-allowed'
-                                                }
-`}
+                                                }`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`${isReady ? category.color : 'text-slate-600'} group - hover: scale - 110 transition - transform`}>
+                                                    <span className={`${isReady ? category.color : 'text-slate-600'} group-hover:scale-110 transition-transform`}>
                                                         {tool.icon}
                                                     </span>
                                                     <span className="font-bold text-slate-200 text-sm">{tool.name}</span>

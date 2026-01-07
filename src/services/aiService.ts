@@ -230,17 +230,22 @@ export const generateWithResearch = async (
     // For now, only Perplexity is fully implemented.
     // iAsk.ai is "Free", we'll mock it with Perplexity sonar if key exists, otherwise maybe a limited mock.
 
-    if (tool !== 'perplexity' && tool !== 'iask-ai') {
-        // Mock success for other tools for now to demonstrate UI
-        return {
-            content: `## Article generated using ${tool}\n\nThis is a placeholder for ${tool} integration.\n\nGenerated for topic: ${topic}`,
-            researchPrompt: `Mock research prompt for ${tool}`,
-            researchResponse: `Mock research response for ${tool}`
-        };
-    }
+    const researchToolsWithKeys: Record<ResearchTool, string | undefined> = {
+        'perplexity': settings.perplexityApiKey,
+        'claude-4-5': settings.claudeApiKey,
+        'gemini-deep': settings.geminiApiKey,
+        'chatgpt-o1': settings.chatgptApiKey,
+        'brave-goggles': settings.braveApiKey,
+        'iask-ai': 'free', // Marked as free
+        'sudowrite': settings.sudowriteApiKey,
+        'novelcrafter': settings.novelcrafterApiKey,
+        'character-ai': settings.characterAiApiKey
+    };
 
-    if (!settings.perplexityApiKey && tool === 'perplexity') {
-        return { content: '', error: 'Perplexity API Key is missing. Please add it in Settings.' };
+    const apiKey = researchToolsWithKeys[tool];
+
+    if (!apiKey && tool !== 'iask-ai') {
+        return { content: '', error: `${tool} API Key is missing. Please add it in Settings.` };
     }
 
     try {
@@ -255,35 +260,60 @@ export const generateWithResearch = async (
             // Generate new research
             researchPrompt = `Conduct comprehensive research on the topic: "${topic}". Gather recent insights, statistics, examples, case studies, and expert opinions. Focus on factual, up-to-date information that would be valuable for a blog article.`;
 
-            const researchResult = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${settings.perplexityApiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'sonar',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You are a research assistant. Provide comprehensive, factual research on the given topic.'
+            try {
+                if (tool === 'claude-4-5') {
+                    // Logic for Claude (assuming Anthropic API structure or similar proxy)
+                    const response = await fetch('/api/claude', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({
+                            model: 'claude-3-5-sonnet-20241022',
+                            max_tokens: 4096,
+                            messages: [{ role: 'user', content: researchPrompt }]
+                        })
+                    });
+                    if (!response.ok) throw new Error(`Claude API Error: ${response.statusText}`);
+                    const data = await response.json();
+                    researchResponse = data.content[0].text;
+                } else if (tool === 'gemini-deep') {
+                    // Logic for Gemini Deep Research
+                    const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash-thinking-exp:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: `Deep research mode: ${researchPrompt}` }] }]
+                        })
+                    });
+                    if (!response.ok) throw new Error(`Gemini Deep Error: ${response.statusText}`);
+                    const data = await response.json();
+                    researchResponse = data.candidates[0].content.parts[0].text;
+                } else {
+                    // Default to Perplexity for others or if perplexity is explicitly chosen
+                    const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${settings.perplexityApiKey || apiKey}`,
+                            'Content-Type': 'application/json',
                         },
-                        {
-                            role: 'user',
-                            content: researchPrompt
-                        }
-                    ],
-                    max_tokens: 2000,
-                })
-            });
-
-            if (!researchResult.ok) {
-                const errorData = await researchResult.json().catch(() => ({}));
-                return { content: '', error: errorData.error?.message || `Research API Error: ${researchResult.statusText}` };
+                        body: JSON.stringify({
+                            model: (tool === 'perplexity' && settings.perplexityModel) ? settings.perplexityModel : 'sonar',
+                            messages: [
+                                { role: 'system', content: 'You are a research assistant. Provide comprehensive, factual research on the given topic.' },
+                                { role: 'user', content: researchPrompt }
+                            ],
+                            max_tokens: 2000,
+                        })
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        return { content: '', error: errorData.error?.message || `Research API Error: ${response.statusText}` };
+                    }
+                    const researchData = await response.json();
+                    researchResponse = researchData.choices[0].message.content;
+                }
+            } catch (err) {
+                return { content: '', error: err instanceof Error ? err.message : 'Research failed' };
             }
-
-            const researchData = await researchResult.json();
-            researchResponse = researchData.choices[0].message.content;
         }
 
         // Step 2: Generate article using research

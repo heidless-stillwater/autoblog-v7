@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Layers, X, Zap, Calendar, ArrowUpDown, GripVertical, Save, FolderOpen, Clock, Trash2, ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { Layers, X, Zap, Calendar, ArrowUpDown, GripVertical, Save, FolderOpen, Clock, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import type { Article, TopicQueueSnapshot } from '../types';
+import ConfirmModal from './ConfirmModal';
 
 export interface TopicQueueProps {
     queue: string[];
@@ -42,7 +43,12 @@ export default function TopicQueue({
     const [showSnapshots, setShowSnapshots] = useState(false);
     const [snapshotLabel, setSnapshotLabel] = useState('backup');
     const [status, setStatus] = useState<{ type: 'success' | 'info' | 'error', msg: string } | null>(null);
-    const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string;
+        onConfirm: () => void;
+        confirmText?: string;
+        cancelText?: string;
+    } | null>(null);
 
     const setTimedStatus = (msg: string, type: 'success' | 'info' | 'error' = 'success') => {
         setStatus({ msg, type });
@@ -489,41 +495,15 @@ export default function TopicQueue({
                 <span className="opacity-50">Double-click to edit</span>
             </div>
 
-            {/* Confirmation Modal */}
+            {/* Global Confirm Modal */}
             {confirmModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div
-                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
-                        onClick={() => setConfirmModal(null)}
-                    />
-                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-                        <div className="p-6">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 shrink-0">
-                                    <AlertCircle size={24} />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-lg font-bold text-white mb-2">Confirm Action</h3>
-                                    <p className="text-sm text-slate-300">{confirmModal.message}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
-                            <button
-                                onClick={() => setConfirmModal(null)}
-                                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmModal.onConfirm}
-                                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
-                            >
-                                Confirm
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <ConfirmModal
+                    message={confirmModal.message}
+                    onConfirm={confirmModal.onConfirm}
+                    onCancel={() => setConfirmModal(null)}
+                    confirmText={confirmModal.confirmText}
+                    cancelText={confirmModal.cancelText}
+                />
             )}
         </div>
     );
