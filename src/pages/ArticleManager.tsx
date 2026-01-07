@@ -14,7 +14,9 @@ const ArticleManager = () => {
     const { articles, deleteArticle, syncHeroImages, isInitialized } = useStore();
     const navigate = useNavigate();
     const { id } = useParams();
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isSyncingHero, setIsSyncingHero] = useState(false);
+    const [isOptimizingSEO, setIsOptimizingSEO] = useState(false);
+    const [isRefreshingStyles, setIsRefreshingStyles] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [refreshProgress, setRefreshProgress] = useState<{ current: number; total: number } | null>(null);
     const [smoothProgress, setSmoothProgress] = useState(0);
@@ -32,8 +34,9 @@ const ArticleManager = () => {
 
     // Effect for smooth, incremental progress simulation (reused from AutoBlog)
     useEffect(() => {
-        if (!isRefreshing || !refreshProgress) {
-            if (!isRefreshing) setSmoothProgress(0);
+        const anyActive = isSyncingHero || isOptimizingSEO || isRefreshingStyles;
+        if (!anyActive || !refreshProgress) {
+            if (!anyActive) setSmoothProgress(0);
             return;
         }
 
@@ -56,7 +59,7 @@ const ArticleManager = () => {
         }, 200);
 
         return () => clearInterval(interval);
-    }, [isRefreshing, refreshProgress]);
+    }, [isSyncingHero, isOptimizingSEO, isRefreshingStyles, refreshProgress]);
 
     // If ID is provided, show article editor
     if (id) {
@@ -136,7 +139,7 @@ const ArticleManager = () => {
     };
 
     const performStyleRefresh = async (targetArticles: Article[]) => {
-        setIsRefreshing(true);
+        setIsRefreshingStyles(true);
         setRefreshProgress({ current: 0, total: targetArticles.length });
         let successCount = 0;
         let failCount = 0;
@@ -201,7 +204,7 @@ const ArticleManager = () => {
                 showCancel: false
             });
         } finally {
-            setIsRefreshing(false);
+            setIsRefreshingStyles(false);
             setRefreshProgress(null);
         }
     };
@@ -210,7 +213,7 @@ const ArticleManager = () => {
         const targetIds = Array.from(selectedIds);
         if (targetIds.length === 0) return;
 
-        setIsRefreshing(true);
+        setIsSyncingHero(true);
         try {
             const result = await syncHeroImages(targetIds);
             setConfirmModal({
@@ -246,7 +249,7 @@ const ArticleManager = () => {
                 showCancel: false
             });
         } finally {
-            setIsRefreshing(false);
+            setIsSyncingHero(false);
         }
     };
 
@@ -266,7 +269,7 @@ const ArticleManager = () => {
         }
 
         setShowSEOModal(false);
-        setIsRefreshing(true);
+        setIsOptimizingSEO(true);
         setRefreshProgress({ current: 0, total: targetArticles.length });
         let successCount = 0;
         let failCount = 0;
@@ -332,7 +335,7 @@ const ArticleManager = () => {
                 showCancel: false
             });
         } finally {
-            setIsRefreshing(false);
+            setIsOptimizingSEO(false);
             setRefreshProgress(null);
         }
     };
@@ -352,30 +355,30 @@ const ArticleManager = () => {
                         <>
                             <button
                                 onClick={handleSyncHeroImages}
-                                disabled={isRefreshing}
+                                disabled={isSyncingHero || isOptimizingSEO || isRefreshingStyles}
                                 className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-purple-500/20"
                                 title={`Sync Hero Images for ${selectedIds.size} selected articles`}
                             >
-                                <ImageIcon size={18} className={isRefreshing ? "animate-spin" : ""} />
-                                {isRefreshing ? 'Syncing...' : `Sync Hero (${selectedIds.size})`}
+                                <ImageIcon size={18} className={isSyncingHero ? "animate-spin" : ""} />
+                                {isSyncingHero ? 'Syncing...' : `Sync Hero (${selectedIds.size})`}
                             </button>
                             <button
                                 onClick={handleOptimizeSelectedSEO}
-                                disabled={isRefreshing}
+                                disabled={isSyncingHero || isOptimizingSEO || isRefreshingStyles}
                                 className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                                 title={`Optimize ${selectedIds.size} selected articles for SEO`}
                             >
-                                <Search size={18} className={isRefreshing ? "animate-spin" : ""} />
-                                {isRefreshing ? 'Optimizing...' : `SEO Optimize (${selectedIds.size})`}
+                                <Search size={18} className={isOptimizingSEO ? "animate-spin" : ""} />
+                                {isOptimizingSEO ? 'Optimizing...' : `SEO Optimize (${selectedIds.size})`}
                             </button>
                             <button
                                 onClick={handleRefreshSelectedStyles}
-                                disabled={isRefreshing}
+                                disabled={isSyncingHero || isOptimizingSEO || isRefreshingStyles}
                                 className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm disabled:opacity-50 shadow-lg shadow-indigo-500/20"
                                 title={`Rewrite ${selectedIds.size} selected articles using the new Style Guide`}
                             >
-                                <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
-                                {isRefreshing ? 'Refreshing...' : `Refresh Style (${selectedIds.size})`}
+                                <RefreshCw size={18} className={isRefreshingStyles ? "animate-spin" : ""} />
+                                {isRefreshingStyles ? 'Refreshing...' : `Refresh Style (${selectedIds.size})`}
                             </button>
                         </>
                     )}
@@ -398,8 +401,16 @@ const ArticleManager = () => {
                                 <RefreshCw size={24} className="animate-spin" />
                             </div>
                             <div>
-                                <h3 className="text-white font-bold text-lg m-0">Processing Article Updates</h3>
-                                <p className="text-slate-400 text-sm m-0">Optimizing content performance...</p>
+                                <h3 className="text-white font-bold text-lg m-0">
+                                    {isRefreshingStyles ? 'Refreshing Article Styles' :
+                                        isOptimizingSEO ? 'Optimizing Article SEO' :
+                                            isSyncingHero ? 'Syncing Hero Images' : 'Processing Updates'}
+                                </h3>
+                                <p className="text-slate-400 text-sm m-0">
+                                    {isRefreshingStyles ? 'Updating content to match the latest style guide...' :
+                                        isOptimizingSEO ? 'Deeply embedding targeted keywords into content...' :
+                                            isSyncingHero ? 'Synchronizing visual themes across articles...' : 'Optimizing content performance...'}
+                                </p>
                             </div>
                         </div>
                         <div className="flex flex-col items-end">
