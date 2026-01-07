@@ -76,7 +76,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     });
     const [showConfig, setShowConfig] = useState(false);
     const [presetName, setPresetName] = useState('');
-    const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+    const [selectedPresetId, setSelectedPresetId] = useState<string | null>('preset-standard-vintage');
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
         onConfirm: () => void;
@@ -176,6 +176,14 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     useEffect(() => {
         loadImagePrompts(articleId);
     }, [articleId]);
+
+    // Initialize default preset on mount
+    useEffect(() => {
+        if (selectedPresetId) {
+            handleApplyPreset(selectedPresetId);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const allPrompts = imagePrompts.filter(p => p.articleId === articleId);
     const filteredPrompts = allPrompts
@@ -278,8 +286,15 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             if (aiError) {
                 setError(aiError);
             } else {
-                for (let i = 0; i < aiPrompts.length; i++) {
-                    const draft = aiPrompts[i];
+                // Sort prompts to ensure hero prompt appears first
+                const sortedPrompts = [...aiPrompts].sort((a, b) => {
+                    if (a.isHero && !b.isHero) return -1;
+                    if (!a.isHero && b.isHero) return 1;
+                    return 0;
+                });
+
+                for (let i = 0; i < sortedPrompts.length; i++) {
+                    const draft = sortedPrompts[i];
 
                     // Find existing prompt for this section to handle versioning
                     const existing = filteredPrompts.find(p => p.sectionTitle === draft.sectionTitle);
@@ -410,32 +425,62 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     };
 
     const findHeaderIndex = (sectionTitle: string, articleContent: string): number => {
+        console.log('🔍 Finding header for section:', sectionTitle);
+
         const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const lowerTitle = sectionTitle.toLowerCase();
-        if (lowerTitle === 'hero image' || lowerTitle === 'hero') return 0;
+
+        // Special case for hero image
+        if (lowerTitle === 'hero image' || lowerTitle === 'hero') {
+            console.log('✅ Hero image detected, inserting at start');
+            return 0;
+        }
+
+        // Strategy 1: Exact match
         const escapedTitle = escapeRegExp(sectionTitle);
         const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
         const exactMatch = articleContent.match(exactRegex);
-        if (exactMatch && exactMatch.index !== undefined) return exactMatch.index;
+        if (exactMatch && exactMatch.index !== undefined) {
+            console.log('✅ Exact match found at index:', exactMatch.index);
+            return exactMatch.index;
+        }
+
+        // Strategy 2: Partial match
         const partialRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
         const partialMatch = articleContent.match(partialRegex);
-        if (partialMatch && partialMatch.index !== undefined) return partialMatch.index;
+        if (partialMatch && partialMatch.index !== undefined) {
+            console.log('✅ Partial match found at index:', partialMatch.index);
+            return partialMatch.index;
+        }
+
+        // Strategy 3: Sanitized fuzzy match
         const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
         const sanitizedTitle = sanitize(sectionTitle);
         const lines = articleContent.split('\n');
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (line.startsWith('#')) {
-                const sanitizedLine = sanitize(line.replace(/^#+\s+/, ''));
+                const headerText = line.replace(/^#+\s+/, '');
+                const sanitizedLine = sanitize(headerText);
+
+                // Check if either contains the other (more lenient matching)
                 if (sanitizedLine.includes(sanitizedTitle) || sanitizedTitle.includes(sanitizedLine)) {
                     let currentPos = 0;
                     for (let j = 0; j < i; j++) {
                         currentPos += lines[j].length + 1;
                     }
+                    console.log('✅ Fuzzy match found:', headerText, 'at index:', currentPos);
                     return currentPos;
                 }
             }
         }
+
+        // Log all available headers for debugging
+        const allHeaders = articleContent.match(/^#+\s+.+$/gm);
+        console.warn('❌ Header not found for section:', sectionTitle);
+        console.log('📋 Available headers in article:', allHeaders);
+
         return -1;
     };
 
@@ -455,7 +500,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         await updateImagePrompt(prompt.id, { isPromptInserted: true });
     };
 
-    const generateAndInsertImage = async (prompt: ImagePrompt) => {
+    const generateAndInsertImage = async (prompt: ImagePrompt, baseContent: string, shouldSetHero: boolean = true): Promise<string | null> => {
         setProcessingIds(prev => new Set(prev).add(prompt.id));
         setError(null);
         try {
@@ -476,7 +521,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             const result = await generateImage(finalPromptText, settings);
             if (result.error) {
                 setError(result.error);
-                return;
+                return null;
             }
             if (result.imageUrl) {
                 const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
@@ -487,28 +532,33 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     createdAt: Date.now(),
                     size: Math.round((compressedUrl.length * 3) / 4)
                 });
-                const article = articles.find(a => a.id === articleId);
-                const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-                if (!hasHero) {
-                    await updateArticle(articleId, { heroImage: compressedUrl });
+                // Only set hero image if shouldSetHero is true
+                if (shouldSetHero) {
+                    const article = articles.find(a => a.id === articleId);
+                    const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+                    if (!hasHero) {
+                        await updateArticle(articleId, { heroImage: compressedUrl });
+                    }
                 }
-                const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
+                const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
                 const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') || prompt.sectionTitle.toLowerCase() === 'intro';
-                let newContent = content;
+                let newContent = baseContent;
                 if (headerIndex !== -1) {
-                    newContent = content.slice(0, headerIndex) + imageMarkdown + content.slice(headerIndex);
+                    newContent = baseContent.slice(0, headerIndex) + imageMarkdown + baseContent.slice(headerIndex);
                 } else if (isIntro) {
-                    newContent = imageMarkdown + content;
+                    newContent = imageMarkdown + baseContent;
                 } else {
-                    newContent = content + imageMarkdown;
+                    newContent = baseContent + imageMarkdown;
                 }
-                onUpdateContent(newContent);
                 await updateImagePrompt(prompt.id, { isImageInserted: true });
+                return newContent;
             }
+            return null;
         } catch (err) {
             setError(`Failed to generate image with NanoBanana: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
+            return null;
         } finally {
             setProcessingIds(prev => {
                 const next = new Set(prev);
@@ -813,7 +863,24 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     onClick={async () => {
                                         setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
-                                        for (const p of selected) await generateAndInsertImage(p);
+                                        let currentContent = content;
+
+                                        // Check hero status once before loop
+                                        const article = articles.find(a => a.id === articleId);
+                                        const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+
+                                        for (let i = 0; i < selected.length; i++) {
+                                            const p = selected[i];
+                                            // Only allow first image to set hero if no hero exists
+                                            const shouldSetHero = i === 0 && !hasHero;
+                                            const updatedContent = await generateAndInsertImage(p, currentContent, shouldSetHero);
+                                            if (updatedContent) {
+                                                currentContent = updatedContent;
+                                            }
+                                        }
+
+                                        // Update content once at the end with all accumulated changes
+                                        onUpdateContent(currentContent);
                                         setIsProcessing(false);
                                         setSelectedIds(new Set());
                                     }}
@@ -921,7 +988,19 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                     <button onClick={() => handleStartEdit(prompt)} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
                                                     <button onClick={() => insertPromptAsQuote(prompt)} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Insert Prompt"><Copy size={16} /></button>
                                                     {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
-                                                    <button onClick={() => generateAndInsertImage(prompt)} disabled={isProcessingPrompt} className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50" title="Generate Image">{isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const updatedContent = await generateAndInsertImage(prompt, content, true);
+                                                            if (updatedContent) {
+                                                                onUpdateContent(updatedContent);
+                                                            }
+                                                        }}
+                                                        disabled={isProcessingPrompt}
+                                                        className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50"
+                                                        title="Generate Image"
+                                                    >
+                                                        {isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                                    </button>
                                                     <button onClick={() => handleDelete(prompt.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={16} /></button>
                                                 </div>
                                             </div>
