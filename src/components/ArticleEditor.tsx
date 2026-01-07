@@ -611,24 +611,30 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             </div>
 
             {/* Hero Image Preview */}
-            {article.heroImage && (
-                <div className="relative h-48 w-full group overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+            <div className="relative h-48 w-full group overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl">
+                {article.heroImage && article.heroImage !== 'null' && article.heroImage.trim() !== '' ? (
                     <img src={article.heroImage} className="w-full h-full object-cover" alt="Hero" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent" />
-                    <div className="absolute bottom-4 left-6 flex items-end justify-between right-6">
-                        <div>
-                            <span className="px-2 py-1 bg-indigo-500 text-white text-[10px] font-bold rounded uppercase tracking-wider">Hero Image</span>
-                        </div>
-                        <button
-                            onClick={handleSyncHero}
-                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors bg-slate-950/50 px-2 py-1 rounded"
-                        >
-                            <RefreshCw size={10} />
-                            Change Hero
-                        </button>
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/50 border-2 border-dashed border-slate-800">
+                        <ImageIcon size={48} className="text-slate-700 mb-2 opacity-50" />
+                        <span className="text-slate-500 text-xs font-medium">No Hero Image Set</span>
                     </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent pointer-events-none" />
+                <div className="absolute bottom-4 left-6 flex items-end justify-between right-6">
+                    <div>
+                        <span className="px-2 py-1 bg-indigo-500 text-white text-[10px] font-bold rounded uppercase tracking-wider">Hero Image</span>
+                    </div>
+                    <button
+                        onClick={handleSyncHero}
+                        disabled={isRefreshing}
+                        className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors bg-slate-950/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 shadow-lg"
+                    >
+                        <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                        {article.heroImage ? 'Change Hero' : 'Set Hero from Content'}
+                    </button>
                 </div>
-            )}
+            </div>
 
             {/* Version Selector & Schedule */}
             <div className="flex flex-col md:flex-row gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
