@@ -113,6 +113,7 @@ const defaultSettings: Settings = {
     queueProcessInterval: 1,
     imageStylePresets: [],
     promptPresets: [],
+    articleDefaultWordCount: 4000,
 };
 
 export const useStore = create<AppState>()((set, get) => ({

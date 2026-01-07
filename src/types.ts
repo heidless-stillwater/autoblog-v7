@@ -63,6 +63,7 @@ export interface Settings {
     queueProcessInterval?: number; // In minutes
     imageStylePresets?: ImageStylePreset[];
     promptPresets?: PromptPreset[];
+    articleDefaultWordCount?: number;
 }
 
 export type ToolCategory = 'debater' | 'muse' | 'analyst';

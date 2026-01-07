@@ -86,6 +86,17 @@ const SettingsModal = () => {
                                     <option value="light">Light</option>
                                 </select>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Article Default Wordcount</label>
+                                <input
+                                    type="number"
+                                    min="500"
+                                    step="500"
+                                    value={localSettings.articleDefaultWordCount || 4000}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, articleDefaultWordCount: parseInt(e.target.value) || 4000 })}
+                                    className="input-field"
+                                />
+                            </div>
                         </div>
                     </div>
 

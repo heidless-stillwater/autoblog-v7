@@ -164,7 +164,7 @@ export const generateFullArticle = async (topic: string, settings: Settings): Pr
     For every blog post you create:
     - **Start by conducting a real-time research session using the topic: "${topic}"** to gather the most recent, accurate, and relevant insights, data, and examples.
     - Tailor the content to the **knowledge level, interests, and needs of the target audience**.
-    - Ensure the article is **a minimum of 2,000 words** to provide depth and SEO value.
+    - Ensure the article is **a minimum of ${settings.articleDefaultWordCount || 2000} words** to provide depth and SEO value.
 
     Writing Guidelines & Output Rules:
     ${ARTICLE_GUIDELINES}
@@ -377,7 +377,7 @@ export const generateWithResearch = async (
     For every blog post you create:
     - Use the provided "Research Data" above to write the article about: "${topic}".
     - Tailor the content to the **knowledge level, interests, and needs of the target audience**.
-    - Ensure the article is **a minimum of 2,000 words** to provide depth and SEO value.
+    - Ensure the article is **a minimum of ${settings.articleDefaultWordCount || 2000} words** to provide depth and SEO value.
 
     Writing Guidelines & Output Rules:
     ${ARTICLE_GUIDELINES}
