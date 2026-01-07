@@ -17,6 +17,14 @@ const ArticleManager = () => {
     const [refreshProgress, setRefreshProgress] = useState<{ current: number; total: number } | null>(null);
     const [smoothProgress, setSmoothProgress] = useState(0);
     const [showSEOModal, setShowSEOModal] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        message: string | React.ReactNode;
+        onConfirm: () => void;
+        onCancel?: () => void;
+        confirmText?: string;
+        cancelText?: string;
+        showCancel?: boolean;
+    } | null>(null);
     const { settings, addArticleVersion, updateArticle } = useStore();
 
     // Effect for smooth, incremental progress simulation (reused from AutoBlog)
@@ -79,12 +87,17 @@ const ArticleManager = () => {
     };
 
     const handleDelete = async (articleId: string) => {
-        if (confirm('Delete this article and all its versions?')) {
-            await deleteArticle(articleId);
-            const newSelected = new Set(selectedIds);
-            newSelected.delete(articleId);
-            setSelectedIds(newSelected);
-        }
+        setConfirmModal({
+            message: 'Are you sure you want to delete this article and all its versions?',
+            onConfirm: async () => {
+                await deleteArticle(articleId);
+                const newSelected = new Set(selectedIds);
+                newSelected.delete(articleId);
+                setSelectedIds(newSelected);
+                setConfirmModal(null);
+            },
+            onCancel: () => setConfirmModal(null)
+        });
     };
 
     const handleToggleSelect = (id: string) => {
@@ -109,10 +122,17 @@ const ArticleManager = () => {
         const targetArticles = articles.filter(a => selectedIds.has(a.id));
         if (!targetArticles.length) return;
 
-        if (!confirm(`Are you sure you want to rewrite ${targetArticles.length} selected articles to match the new Blog Tone & Style Guide? This will create new versions for each article.`)) {
-            return;
-        }
+        setConfirmModal({
+            message: `Are you sure you want to rewrite ${targetArticles.length} selected articles to match the new Blog Tone & Style Guide? This will create new versions for each article.`,
+            onConfirm: () => {
+                setConfirmModal(null);
+                performStyleRefresh(targetArticles);
+            },
+            onCancel: () => setConfirmModal(null)
+        });
+    };
 
+    const performStyleRefresh = async (targetArticles: Article[]) => {
         setIsRefreshing(true);
         setRefreshProgress({ current: 0, total: targetArticles.length });
         let successCount = 0;
@@ -146,11 +166,37 @@ const ArticleManager = () => {
 
                 setRefreshProgress({ current: i + 1, total: targetArticles.length });
             }
-            alert(`Style refresh complete!\nUpdated: ${successCount}\nFailed: ${failCount}`);
+            setConfirmModal({
+                message: (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-emerald-400">
+                            <CheckCircle2 size={24} />
+                            <h3 className="text-lg font-bold">Style Refresh Complete!</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Updated</p>
+                                <p className="text-2xl font-black text-white">{successCount}</p>
+                            </div>
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Failed</p>
+                                <p className="text-2xl font-black text-slate-400">{failCount}</p>
+                            </div>
+                        </div>
+                    </div>
+                ),
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false,
+                confirmText: 'Awesome'
+            });
             setSelectedIds(new Set());
         } catch (error) {
             console.error('Refresh styles failed:', error);
-            alert('An error occurred during the style refresh.');
+            setConfirmModal({
+                message: 'An error occurred during the style refresh.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsRefreshing(false);
             setRefreshProgress(null);
@@ -164,11 +210,38 @@ const ArticleManager = () => {
         setIsRefreshing(true);
         try {
             const result = await syncHeroImages(targetIds);
-            alert(`Hero image sync complete!\nUpdated: ${result.updated}\nFailed: ${result.failed}\n\nNote: Only articles missing a hero image are updated using the first image found in their content.`);
+            setConfirmModal({
+                message: (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-purple-400">
+                            <ImageIcon size={24} />
+                            <h3 className="text-lg font-bold">Hero Image Sync Complete!</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Updated</p>
+                                <p className="text-2xl font-black text-white">{result.updated}</p>
+                            </div>
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Failed</p>
+                                <p className="text-2xl font-black text-slate-400">{result.failed}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 italic">Note: Only articles missing a hero image are updated using the first image found in their content.</p>
+                    </div>
+                ),
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false,
+                confirmText: 'Got it'
+            });
             setSelectedIds(new Set());
         } catch (error) {
             console.error('Sync hero images failed:', error);
-            alert('An error occurred during the hero image sync.');
+            setConfirmModal({
+                message: 'An error occurred during the hero image sync.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsRefreshing(false);
         }
@@ -224,11 +297,37 @@ const ArticleManager = () => {
 
                 setRefreshProgress({ current: i + 1, total: targetArticles.length });
             }
-            alert(`SEO optimization complete!\nUpdated: ${successCount}\nFailed: ${failCount}`);
+            setConfirmModal({
+                message: (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-emerald-400">
+                            <CheckCircle2 size={24} />
+                            <h3 className="text-lg font-bold">SEO Optimization Complete!</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Updated</p>
+                                <p className="text-2xl font-black text-white">{successCount}</p>
+                            </div>
+                            <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <p className="text-slate-500 text-xs uppercase font-bold mb-1">Failed</p>
+                                <p className="text-2xl font-black text-slate-400">{failCount}</p>
+                            </div>
+                        </div>
+                    </div>
+                ),
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false,
+                confirmText: 'Done'
+            });
             setSelectedIds(new Set());
         } catch (error) {
             console.error('SEO optimization failed:', error);
-            alert('An error occurred during the SEO optimization.');
+            setConfirmModal({
+                message: 'An error occurred during the SEO optimization.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
         } finally {
             setIsRefreshing(false);
             setRefreshProgress(null);
@@ -410,10 +509,10 @@ const ArticleManager = () => {
                                                     {article.versions.length} version{article.versions.length !== 1 ? 's' : ''}
                                                 </span>
                                                 <span className={`px-2 py-0.5 rounded uppercase tracking-wider text-xs font-semibold border ${article.status === 'published'
-                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                        : article.status === 'draft'
-                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                            : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : article.status === 'draft'
+                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                                                     }`}>
                                                     {article.status}
                                                 </span>
@@ -460,6 +559,44 @@ const ArticleManager = () => {
                     onConfirm={proceedWithSEOOptimization}
                     onClose={() => setShowSEOModal(false)}
                 />
+            )}
+
+            {confirmModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+                    <div
+                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+                        onClick={() => confirmModal.onCancel?.()}
+                    />
+                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 sm:p-8">
+                            <div className="text-lg text-slate-200 leading-relaxed">
+                                {confirmModal.message}
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-950/50 border-t border-slate-800 flex gap-3 justify-end">
+                            {confirmModal.showCancel !== false && (
+                                <button
+                                    onClick={() => {
+                                        if (confirmModal.onCancel) confirmModal.onCancel();
+                                        setConfirmModal(null);
+                                    }}
+                                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-colors"
+                                >
+                                    {confirmModal.cancelText || 'Cancel'}
+                                </button>
+                            )}
+                            <button
+                                onClick={() => {
+                                    confirmModal.onConfirm();
+                                    if (confirmModal.showCancel === false) setConfirmModal(null);
+                                }}
+                                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                            >
+                                {confirmModal.confirmText || 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
