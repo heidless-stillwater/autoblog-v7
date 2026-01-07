@@ -31,8 +31,8 @@ const CATEGORIES: { id: ToolCategory; name: string; icon: React.ReactNode; color
         color: 'text-emerald-400',
         tools: [
             { id: 'perplexity', name: 'Perplexity', description: 'Real-time research & drafting', icon: <Zap size={18} />, isReady: true },
-            { id: 'brave-goggles', name: 'Brave Search "goggles"', description: 'Custom search filters', icon: <SearchIcon size={18} />, isReady: false },
-            { id: 'claude-4-5', name: 'Claude 4.5', description: 'Advanced reasoning & research', icon: <Cpu size={18} />, isReady: false },
+            { id: 'brave-goggles', name: 'Brave Search "goggles"', description: 'Custom search filters', icon: <SearchIcon size={18} />, isReady: true },
+            { id: 'claude-4-5', name: 'Claude 4.5', description: 'Advanced reasoning & research', icon: <Cpu size={18} />, isReady: true },
         ]
     },
     {
@@ -41,9 +41,9 @@ const CATEGORIES: { id: ToolCategory; name: string; icon: React.ReactNode; color
         icon: <BookOpen className="text-purple-400" size={20} />,
         color: 'text-purple-400',
         tools: [
-            { id: 'sudowrite', name: 'Sudowrite', description: 'Prose Specialist', icon: <BookOpen size={18} />, isReady: false },
-            { id: 'novelcrafter', name: 'Novelcrafter', description: 'Story structure expert', icon: <Book size={18} />, isReady: false },
-            { id: 'character-ai', name: 'Character.ai', description: 'Persona-driven drafting', icon: <Users size={18} />, isReady: false },
+            { id: 'sudowrite', name: 'Sudowrite', description: 'Prose Specialist', icon: <BookOpen size={18} />, isReady: true },
+            { id: 'novelcrafter', name: 'Novelcrafter', description: 'Story structure expert', icon: <Book size={18} />, isReady: true },
+            { id: 'character-ai', name: 'Character.ai', description: 'Persona-driven drafting', icon: <Users size={18} />, isReady: true },
         ]
     },
     {
@@ -52,8 +52,8 @@ const CATEGORIES: { id: ToolCategory; name: string; icon: React.ReactNode; color
         icon: <Brain className="text-amber-400" size={20} />,
         color: 'text-amber-400',
         tools: [
-            { id: 'gemini-deep', name: 'Gemini Deep Research', description: 'Recursive data gathering', icon: <Bot size={18} />, isAdvanced: true, isReady: false },
-            { id: 'chatgpt-o1', name: 'ChatGPT Deep Research', description: 'o1-powered reasoning', icon: <Brain size={18} />, isAdvanced: true, isReady: false },
+            { id: 'gemini-deep', name: 'Gemini Deep Research', description: 'Recursive data gathering', icon: <Bot size={18} />, isAdvanced: true, isReady: true },
+            { id: 'chatgpt-o1', name: 'ChatGPT Deep Research', description: 'o1-powered reasoning', icon: <Brain size={18} />, isAdvanced: true, isReady: true },
             { id: 'iask-ai', name: 'iAsk.ai', description: 'Best free alternative', icon: <Zap size={18} />, isFree: true, isReady: true },
         ]
     }

@@ -17,7 +17,8 @@ import {
     Square,
     Sparkles,
     Plus,
-    Loader2
+    Loader2,
+    RotateCcw
 } from 'lucide-react';
 import StyleOptionsSelector from './StyleOptionsSelector';
 import type { StyleOptions } from './StyleOptionsSelector';
@@ -59,6 +60,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
     const [isProcessing, setIsProcessing] = useState(false);
+    const [viewingHistoryTitle, setViewingHistoryTitle] = useState<string | null>(null);
 
     // Form states
     const [newTitle, setNewTitle] = useState('');
@@ -101,8 +103,9 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         loadImagePrompts(articleId);
     }, [articleId]);
 
-    const filteredPrompts = imagePrompts
-        .filter(p => p.articleId === articleId)
+    const allPrompts = imagePrompts.filter(p => p.articleId === articleId);
+    const filteredPrompts = allPrompts
+        .filter(p => !allPrompts.some(other => other.sectionTitle === p.sectionTitle && (other.version || 1) > (p.version || 1)))
         .sort((a, b) => a.createdAt - b.createdAt);
 
     const handleGenerate = async () => {
@@ -163,16 +166,26 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             } else {
                 for (let i = 0; i < aiPrompts.length; i++) {
                     const draft = aiPrompts[i];
+
+                    // Find existing prompt for this section to handle versioning
+                    const existing = filteredPrompts.find(p => p.sectionTitle === draft.sectionTitle);
+                    const newVersion = (existing?.version || 1) + 1;
+                    const previousId = existing?.id;
+
                     await addImagePrompt({
                         articleId,
                         topic,
                         sectionTitle: draft.sectionTitle,
                         prompt: draft.prompt,
                         isHero: draft.isHero,
+                        heroReasoning: draft.heroReasoning,
+                        version: existing ? newVersion : 1,
+                        previousVersionId: previousId,
                         createdAt: Date.now() + i,
                         updatedAt: Date.now() + i
                     });
                 }
+                setShowConfig(false); // Hide config after successful generation
             }
         } catch (err) {
             setError('Failed to generate prompts. Please check your AI settings.');
@@ -712,6 +725,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                         <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                                                             {prompt.sectionTitle}
                                                             {isHero && <span className="flex items-center gap-1 text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter"><Star size={8} className="fill-current" /> Hero</span>}
+                                                            {(prompt.version || 1) > 1 && <span className="text-[9px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full border border-slate-600 font-bold uppercase tracking-tighter">v{prompt.version}</span>}
                                                             {prompt.isPromptInserted && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-tighter">P-Inserted</span>}
                                                             {prompt.isImageInserted && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold uppercase tracking-tighter">I-Inserted</span>}
                                                         </h4>
@@ -726,6 +740,31 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                 </div>
                                             </div>
                                             <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700/50 pl-4 py-1">"{prompt.prompt}"</p>
+                                            {isHero && prompt.heroReasoning && (
+                                                <div className="mt-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-3">
+                                                    <p className="text-[9px] font-black text-amber-500/50 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                        <Sparkles size={10} />
+                                                        Hero Gestalt Reasoning
+                                                    </p>
+                                                    <p className="text-xs text-amber-200/70 leading-relaxed italic">
+                                                        {prompt.heroReasoning}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {(prompt.version || 1) > 1 && (
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setViewingHistoryTitle(prompt.sectionTitle);
+                                                        }}
+                                                        className="text-[9px] font-black text-slate-500 hover:text-indigo-400 uppercase tracking-widest flex items-center gap-1 transition-colors"
+                                                    >
+                                                        <Copy size={10} />
+                                                        View Version History
+                                                    </button>
+                                                </div>
+                                            )}
                                         </>
                                     )}
                                 </div>
@@ -733,6 +772,63 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         })}
                     </div>
                 </div>
+            )}
+            {viewingHistoryTitle && (
+                <ConfirmModal
+                    message={
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                            <div className="flex items-center gap-2 text-indigo-400 mb-4">
+                                <Copy size={18} />
+                                <h4 className="font-bold text-white">Version History: {viewingHistoryTitle}</h4>
+                            </div>
+                            {allPrompts
+                                .filter(p => p.sectionTitle === viewingHistoryTitle)
+                                .sort((a, b) => (b.version || 1) - (a.version || 1))
+                                .map((version, i) => (
+                                    <div
+                                        key={version.id}
+                                        className={clsx(
+                                            "p-4 rounded-xl border transition-all",
+                                            i === 0 ? "bg-indigo-500/10 border-indigo-500/30" : "bg-slate-800/50 border-slate-700 hover:bg-slate-800"
+                                        )}
+                                    >
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                                Version {version.version || 1} {i === 0 && <span className="text-indigo-400 ml-2">(Latest)</span>}
+                                            </span>
+                                            <span className="text-[10px] text-slate-600">{format(version.createdAt, 'MMM d, h:mm a')}</span>
+                                        </div>
+                                        <p className="text-sm text-slate-300 italic mb-3">"{version.prompt}"</p>
+                                        {i > 0 && (
+                                            <button
+                                                onClick={async () => {
+                                                    // To 'restore', we create a new version with the old content
+                                                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                                    const { id: _, ...rest } = version;
+                                                    const restoredPrompt: Omit<ImagePrompt, 'id'> = {
+                                                        ...rest,
+                                                        version: (allPrompts.find(p => p.sectionTitle === viewingHistoryTitle)?.version || 1) + 1,
+                                                        previousVersionId: version.id,
+                                                        createdAt: Date.now(),
+                                                        updatedAt: Date.now()
+                                                    };
+                                                    await addImagePrompt(restoredPrompt);
+                                                    setViewingHistoryTitle(null);
+                                                }}
+                                                className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-widest flex items-center gap-1"
+                                            >
+                                                <RotateCcw size={10} />
+                                                Restore this version
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                        </div>
+                    }
+                    onConfirm={() => setViewingHistoryTitle(null)}
+                    confirmText="Done"
+                    showCancel={false}
+                />
             )}
             {confirmModal && (
                 <ConfirmModal

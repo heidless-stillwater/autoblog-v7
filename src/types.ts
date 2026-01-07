@@ -104,6 +104,9 @@ export interface ImagePrompt {
     isPromptInserted?: boolean;
     isImageInserted?: boolean;
     isHero?: boolean;
+    version?: number;
+    previousVersionId?: string;
+    heroReasoning?: string; // Analysis of why this visual represents the article theme
 }
 
 export interface User {

@@ -287,6 +287,55 @@ export const generateWithResearch = async (
                     if (!response.ok) throw new Error(`Gemini Deep Error: ${response.statusText}`);
                     const data = await response.json();
                     researchResponse = data.candidates[0].content.parts[0].text;
+                } else if (tool === 'brave-goggles') {
+                    // Brave Search Goggles integration
+                    const response = await fetch('/api/brave/v1/web/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Subscription-Token': apiKey as string
+                        },
+                        body: JSON.stringify({ q: topic, goggles_id: 'original_content_only' })
+                    });
+                    if (!response.ok) throw new Error(`Brave API Error: ${response.statusText}`);
+                    const data = await response.json();
+                    researchResponse = data.web?.results?.map((r: any) => `${r.title}: ${r.description}`).join('\n\n') || 'No search results found.';
+                } else if (tool === 'chatgpt-o1') {
+                    // OpenAI o1 Integration
+                    const response = await fetch('/api/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({
+                            model: 'o1-preview',
+                            messages: [{ role: 'user', content: researchPrompt }]
+                        })
+                    });
+                    if (!response.ok) throw new Error(`OpenAI API Error: ${response.statusText}`);
+                    const data = await response.json();
+                    researchResponse = data.choices[0].message.content;
+                } else if (['sudowrite', 'novelcrafter', 'character-ai'].includes(tool)) {
+                    // Persona-based mocks for specialized tools
+                    const personas: Record<string, string> = {
+                        'sudowrite': 'You are a fiction-focused writing assistant. Provide deep sensory details and narrative arcs for this topic.',
+                        'novelcrafter': 'You are a world-building and character development expert. Research this topic with an eye for dramatic tension and lore.',
+                        'character-ai': 'You are a charismatic subject matter expert. Discuss this topic with a distinct, engaging personality.'
+                    };
+                    const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${settings.perplexityApiKey}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'sonar',
+                            messages: [
+                                { role: 'system', content: personas[tool] || 'You are a creative research assistant.' },
+                                { role: 'user', content: researchPrompt }
+                            ],
+                            max_tokens: 2000
+                        })
+                    });
+                    if (!response.ok) throw new Error(`${tool} Persona Mock Error: ${response.statusText}`);
+                    const data = await response.json();
+                    researchResponse = data.choices[0].message.content;
                 } else {
                     // Default to Perplexity for others or if perplexity is explicitly chosen
                     const response = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
@@ -626,6 +675,7 @@ export interface ImagePromptDraft {
     sectionTitle: string;
     prompt: string;
     isHero?: boolean;
+    heroReasoning?: string; // Analysis of visual choices
 }
 
 export const DEFAULT_NANOBANANA_GUIDELINES = `For each identified section, create a high-fidelity, photorealistic image generation prompt for NanoBanana. 
@@ -659,13 +709,14 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     
     CRITICAL CONSTRAINT: One of these 8 prompts MUST be the "Hero" prompt. 
     The "Hero" visual should NOT just be a literal scene from the text, but a 'gestalt' interpretation—a high-impact conceptual visual that captures the soul and central theme of the entire article. Mark this one as "isHero: true".
+    **Hero Reasoning**: For the Hero image, you MUST provide a "heroReasoning" field in the JSON explaining the conceptual choices and how they represent the article's core theme.
 
     Return ONLY a JSON object. No markdown formatting.
 
     Post Content:
     ${content}
 
-    Format your response as a JSON object with a "prompts" array. Each object in the array should have fields: "sectionTitle", "prompt", "rationale", and "isHero" (boolean).
+    Format your response as a JSON object with a "prompts" array. Each object in the array should have fields: "sectionTitle", "prompt", "rationale", "isHero" (boolean), and "heroReasoning" (string, for hero only).
     `;
 
     try {
