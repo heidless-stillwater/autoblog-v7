@@ -600,7 +600,7 @@ export interface ImagePromptDraft {
 /**
  * Generates image prompts for major blog sections using Gemini
  */
-export const generateImagePrompts = async (content: string, settings: Settings): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
+export const generateImagePrompts = async (content: string, settings: Settings, customInstructions?: string): Promise<{ prompts: ImagePromptDraft[], error?: string }> => {
     if (!settings.geminiApiKey) {
         return { prompts: [], error: 'Gemini API Key is missing. Please add it in Settings.' };
     }
@@ -614,6 +614,10 @@ Rules:
 3. Limit to exactly 8 prompts total.
 4. Each prompt should be a vivid description of a scene or concept, suitable for high-quality AI image generation.
 5. Output ONLY a clean JSON array of objects with keys: "sectionTitle" and "prompt".
+
+${customInstructions ? `SPECIFIC STYLE & CONTEXT INSTRUCTIONS:
+${customInstructions}
+` : ''}
 
 Blog Post Content:
 ${content}
