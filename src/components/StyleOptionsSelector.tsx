@@ -1,20 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Layout, Palette, Sun, Camera, Check } from 'lucide-react';
 import clsx from 'clsx';
-
-export interface StyleOptions {
-    composition: string;
-    medium: string;
-    lighting: string;
-    mood: string;
-}
+import type { StyleOptions } from '../types';
 
 interface StyleOptionsSelectorProps {
+    options: StyleOptions;
     onUpdate: (options: StyleOptions) => void;
-    initialOptions?: Partial<StyleOptions>;
 }
 
 const OPTIONS = {
+    // ... same as before
     composition: [
         { label: 'Rule of Thirds', value: 'rule of thirds composition' },
         { label: 'Wide Angle', value: 'wide angle shot' },
@@ -45,23 +40,12 @@ const OPTIONS = {
     ]
 };
 
-const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ onUpdate, initialOptions }) => {
-    const [selected, setSelected] = useState<StyleOptions>({
-        composition: initialOptions?.composition || '',
-        medium: initialOptions?.medium || '',
-        lighting: initialOptions?.lighting || '',
-        mood: initialOptions?.mood || ''
-    });
-
-    useEffect(() => {
-        onUpdate(selected);
-    }, [selected]);
-
+const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ options, onUpdate }) => {
     const toggleOption = (category: keyof StyleOptions, value: string) => {
-        setSelected(prev => ({
-            ...prev,
-            [category]: prev[category] === value ? '' : value
-        }));
+        onUpdate({
+            ...options,
+            [category]: options[category] === value ? '' : value
+        });
     };
 
     return (
@@ -80,12 +64,12 @@ const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ onUpdate, i
                                 onClick={() => toggleOption('composition', opt.value)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5",
-                                    selected.composition === opt.value
+                                    options.composition === opt.value
                                         ? "bg-indigo-500/20 border-indigo-500 text-indigo-300"
                                         : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
                                 )}
                             >
-                                {selected.composition === opt.value && <Check size={12} />}
+                                {options.composition === opt.value && <Check size={12} />}
                                 {opt.label}
                             </button>
                         ))}
@@ -105,12 +89,12 @@ const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ onUpdate, i
                                 onClick={() => toggleOption('medium', opt.value)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5",
-                                    selected.medium === opt.value
+                                    options.medium === opt.value
                                         ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
                                         : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
                                 )}
                             >
-                                {selected.medium === opt.value && <Check size={12} />}
+                                {options.medium === opt.value && <Check size={12} />}
                                 {opt.label}
                             </button>
                         ))}
@@ -130,12 +114,12 @@ const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ onUpdate, i
                                 onClick={() => toggleOption('lighting', opt.value)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5",
-                                    selected.lighting === opt.value
+                                    options.lighting === opt.value
                                         ? "bg-amber-500/20 border-amber-500 text-amber-300"
                                         : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
                                 )}
                             >
-                                {selected.lighting === opt.value && <Check size={12} />}
+                                {options.lighting === opt.value && <Check size={12} />}
                                 {opt.label}
                             </button>
                         ))}
@@ -155,12 +139,12 @@ const StyleOptionsSelector: React.FC<StyleOptionsSelectorProps> = ({ onUpdate, i
                                 onClick={() => toggleOption('mood', opt.value)}
                                 className={clsx(
                                     "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5",
-                                    selected.mood === opt.value
+                                    options.mood === opt.value
                                         ? "bg-purple-500/20 border-purple-500 text-purple-300"
                                         : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600"
                                 )}
                             >
-                                {selected.mood === opt.value && <Check size={12} />}
+                                {options.mood === opt.value && <Check size={12} />}
                                 {opt.label}
                             </button>
                         ))}

@@ -20,6 +20,22 @@ export interface MediaItem {
     size: number;
 }
 
+export interface StyleOptions {
+    composition: string;
+    medium: string;
+    lighting: string;
+    mood: string;
+}
+
+export interface PromptPreset {
+    id: string;
+    name: string;
+    styleOptions: StyleOptions;
+    customInstructions: string;
+    modelGuidelines: string;
+    createdAt: number;
+}
+
 export interface ImageStylePreset {
     id: string;
     name: string;
@@ -46,6 +62,7 @@ export interface Settings {
     topicQueue?: string[];
     queueProcessInterval?: number; // In minutes
     imageStylePresets?: ImageStylePreset[];
+    promptPresets?: PromptPreset[];
 }
 
 export type ToolCategory = 'debater' | 'muse' | 'analyst';

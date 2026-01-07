@@ -112,6 +112,7 @@ const defaultSettings: Settings = {
     topicQueue: [],
     queueProcessInterval: 1,
     imageStylePresets: [],
+    promptPresets: [],
 };
 
 export const useStore = create<AppState>()((set, get) => ({
