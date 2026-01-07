@@ -98,11 +98,13 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             // Text block before the match
             if (match.index > lastIndex) {
                 const text = markdown.slice(lastIndex, match.index);
-                if (text.trim().length > 0 || (newBlocks.length === 0 && text.length > 0)) {
+                // Trim to avoid accumulating empty whitespace blocks
+                const trimmedText = text.trim();
+                if (trimmedText.length > 0) {
                     newBlocks.push({
                         id: `text-${Math.random().toString(36).substr(2, 9)}`,
                         type: 'text',
-                        content: text
+                        content: trimmedText
                     });
                 }
             }
@@ -125,7 +127,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 newBlocks.push({
                     id: `text-${Math.random().toString(36).substr(2, 9)}`,
                     type: 'text',
-                    content: matchedText
+                    content: matchedText.trim()
                 });
             }
             lastIndex = regex.lastIndex;
@@ -134,11 +136,12 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         // Final text block
         if (lastIndex < markdown.length) {
             const remaining = markdown.slice(lastIndex);
-            if (remaining.length > 0) {
+            const trimmedRemaining = remaining.trim();
+            if (trimmedRemaining.length > 0) {
                 newBlocks.push({
                     id: `text-${Math.random().toString(36).substr(2, 9)}`,
                     type: 'text',
-                    content: remaining
+                    content: trimmedRemaining
                 });
             }
         }
@@ -156,9 +159,11 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     };
 
     const serializeBlocksToMarkdown = (blockArray: Block[]): string => {
-        return blockArray.map(b =>
-            b.type === 'text' ? b.content : `![${b.alt}](${b.url})`
-        ).join('');
+        // Joining with double newlines ensures blocks are treated as separate paragraphs/entities
+        return blockArray
+            .map(b => (b.type === 'text' ? (b.content || '').trim() : `![${b.alt || ''}](${b.url || ''})`))
+            .filter(content => content.length > 0)
+            .join('\n\n');
     };
 
     // Sync local content and blocks when version changes

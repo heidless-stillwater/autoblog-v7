@@ -293,6 +293,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         prompt: draft.prompt || '',
                         isHero: !!draft.isHero,
                         heroReasoning: draft.heroReasoning || '',
+                        presetId: selectedPresetId || '',
                         version: existing ? newVersion : 1,
                         previousVersionId: previousId || '',
                         createdAt: Date.now() + i,
@@ -308,6 +309,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const handleUpdatePresetForPrompt = async (promptId: string, pId: string) => {
+        await updateImagePrompt(promptId, { presetId: pId });
     };
 
     const handleAddManual = async () => {
@@ -454,7 +459,21 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         setProcessingIds(prev => new Set(prev).add(prompt.id));
         setError(null);
         try {
-            const result = await generateImage(prompt.prompt, settings);
+            let finalPromptText = prompt.prompt;
+
+            // Find and apply specific preset styles if assigned
+            const pId = prompt.presetId;
+            if (pId) {
+                const preset = allPresets.find(p => p.id === pId);
+                if (preset) {
+                    const styleParts = Object.values(preset.styleOptions || {}).filter(v => !!v);
+                    if (styleParts.length > 0) {
+                        finalPromptText = `${prompt.prompt}, style: ${styleParts.join(', ')}`;
+                    }
+                }
+            }
+
+            const result = await generateImage(finalPromptText, settings);
             if (result.error) {
                 setError(result.error);
                 return;
@@ -904,6 +923,36 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                     {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
                                                     <button onClick={() => generateAndInsertImage(prompt)} disabled={isProcessingPrompt} className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50" title="Generate Image">{isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}</button>
                                                     <button onClick={() => handleDelete(prompt.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={16} /></button>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                <div className="relative">
+                                                    <select
+                                                        value={prompt.presetId || ''}
+                                                        onChange={(e) => handleUpdatePresetForPrompt(prompt.id, e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
+                                                    >
+                                                        <option value="">No Preset Applied</option>
+                                                        <optgroup label="Standard Styles">
+                                                            {STANDARD_PRESETS.map(p => (
+                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                            ))}
+                                                        </optgroup>
+                                                        {(settings.promptPresets || []).length > 0 && (
+                                                            <optgroup label="My Presets">
+                                                                {(settings.promptPresets || []).map(p => (
+                                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                                ))}
+                                                            </optgroup>
+                                                        )}
+                                                    </select>
+                                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                        <Sparkles size={12} />
+                                                    </div>
+                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                        <ChevronDown size={10} />
+                                                    </div>
                                                 </div>
                                             </div>
                                             <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700/50 pl-4 py-1">"{prompt.prompt}"</p>

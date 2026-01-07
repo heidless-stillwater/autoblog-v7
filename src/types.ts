@@ -124,6 +124,7 @@ export interface ImagePrompt {
     version?: number;
     previousVersionId?: string;
     heroReasoning?: string; // Analysis of why this visual represents the article theme
+    presetId?: string; // ID of the preset applied to this prompt
 }
 
 export interface User {
