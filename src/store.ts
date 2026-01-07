@@ -98,7 +98,7 @@ const defaultSettings: Settings = {
     siteTitle: 'My Awesome Blog',
     tagline: 'Just another WordPress clone',
     perplexityApiKey: '',
-    geminiApiKey: '',
+    geminiApiKey: 'AIzaSyBmzqll55QHjuxw6IaWb7EjZsNs3TvRTmg',
     perplexityModel: 'sonar',
     theme: 'system',
     customSeeds: [],
