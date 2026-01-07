@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { format } from 'date-fns';
-import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search, Image as ImageIcon } from 'lucide-react';
+import { Plus, Calendar, FileText, Clock, Trash2, Edit, Eye, Layers, RefreshCw, CheckSquare, Square, CheckCircle2, Search, Image as ImageIcon, Wand2 } from 'lucide-react';
 import { useNavigate, useParams, Link, Navigate } from 'react-router-dom';
 import ArticleEditor from '../components/ArticleEditor';
 import SEOKeywordsModal from '../components/SEOKeywordsModal';
+import StyleTransformerModal from '../components/StyleTransformerModal';
 import type { Article, ArticleVersion } from '../types';
 import { rewriteToStyle, optimizeForSEO } from '../services/aiService';
 
@@ -17,6 +18,7 @@ const ArticleManager = () => {
     const [refreshProgress, setRefreshProgress] = useState<{ current: number; total: number } | null>(null);
     const [smoothProgress, setSmoothProgress] = useState(0);
     const [showSEOModal, setShowSEOModal] = useState(false);
+    const [styleTransformArticle, setStyleTransformArticle] = useState<Article | null>(null);
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
         onConfirm: () => void;
@@ -539,6 +541,13 @@ const ArticleManager = () => {
                                             {article.status === 'published' ? 'Unpublish' : 'Publish'}
                                         </button>
                                         <button
+                                            onClick={() => setStyleTransformArticle(article)}
+                                            className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
+                                            title="Style Transformer"
+                                        >
+                                            <Wand2 size={16} />
+                                        </button>
+                                        <button
                                             onClick={() => handleDelete(article.id)}
                                             className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                                             title="Delete"
@@ -558,6 +567,30 @@ const ArticleManager = () => {
                     articles={articles.filter(a => selectedIds.has(a.id))}
                     onConfirm={proceedWithSEOOptimization}
                     onClose={() => setShowSEOModal(false)}
+                />
+            )}
+
+            {styleTransformArticle && (
+                <StyleTransformerModal
+                    article={styleTransformArticle}
+                    onClose={() => setStyleTransformArticle(null)}
+                    onSuccess={() => {
+                        setStyleTransformArticle(null);
+                        setConfirmModal({
+                            message: (
+                                <div className="flex items-center gap-3 text-emerald-400">
+                                    <CheckCircle2 size={24} />
+                                    <div>
+                                        <h3 className="font-bold text-lg">Style Applied!</h3>
+                                        <p className="text-sm text-slate-400">A new version has been created for "{styleTransformArticle.topic}".</p>
+                                    </div>
+                                </div>
+                            ),
+                            onConfirm: () => setConfirmModal(null),
+                            showCancel: false,
+                            confirmText: 'Great'
+                        });
+                    }}
                 />
             )}
 

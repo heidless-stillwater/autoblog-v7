@@ -1,4 +1,4 @@
-import type { Settings } from "../types";
+import type { Settings, ResearchTool } from "../types";
 
 export interface AIResponse {
     content: string;
@@ -403,16 +403,18 @@ export const generateTopics = async (seed: string, settings: Settings): Promise<
 /**
  * Rewrites existing content to match the Blog Style Guide
  */
-export const rewriteToStyle = async (content: string, settings: Settings): Promise<AIResponse> => {
+export const rewriteToStyle = async (content: string, settings: Settings, customInstructions?: string): Promise<AIResponse> => {
     if (!settings.perplexityApiKey) {
         return { content: '', error: 'Perplexity API Key is missing. Please add it in Settings.' };
     }
 
     const prompt = `
-    Task: Rewrite the following blog article content to strictly adhere to the Blog Tone & Style Guide provided below, while ENHANCING the structure and formatting.
+    Task: Rewrite the following blog article content to strictly adhere to its specific Style Guide instructions, while ENHANCING the structure and formatting.
     
-    Style Guide:
-    ${BLOG_STYLE_GUIDE}
+    ${customInstructions ? `Specific Style Instructions for this article:
+    ${customInstructions}
+    ` : `Global Style Guide:
+    ${BLOG_STYLE_GUIDE}`}
     
     Writing & Formatting Rules:
     ${ARTICLE_GUIDELINES}
@@ -421,7 +423,7 @@ export const rewriteToStyle = async (content: string, settings: Settings): Promi
     ${content}
     
     Instructions:
-    - REWRITE the content to match the "Voice & Personality" from the Style Guide.
+    - REWRITE the content to match the provided style instructions.
     - RESTRUCTURE the content to match the "Writing Guidelines" above (add H3s, lists, emojis if missing).
     - Ensure all Output Rules are met (valid Markdown, no intro/outro).
     - **CRITICAL**: Do NOT remove Markdown headers (#, ##, etc.). ENHANCE them.
