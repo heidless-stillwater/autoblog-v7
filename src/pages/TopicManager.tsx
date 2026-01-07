@@ -213,6 +213,15 @@ const TopicManager = () => {
 
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         continue;
+                    } else {
+                        // Log that we are regenerating
+                        const timestamp = format(new Date(), 'HH:mm:ss');
+                        setLogs(prev => [...prev, {
+                            topic,
+                            timestamp,
+                            status: 'info',
+                            message: `Regenerating topic: ${topic}`
+                        }]);
                     }
                 }
 
@@ -511,7 +520,10 @@ const TopicManager = () => {
                                 Cancel
                             </button>
                             <button
-                                onClick={confirmModal.onConfirm}
+                                onClick={() => {
+                                    confirmModal.onConfirm();
+                                    setConfirmModal(null);
+                                }}
                                 className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
                             >
                                 Confirm

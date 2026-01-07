@@ -4,7 +4,7 @@ import { Terminal, Clock, CheckCircle2, Loader2 } from 'lucide-react';
 export interface LogEntry {
     topic: string;
     timestamp: string;
-    status: 'processing' | 'completed' | 'error' | 'skipped';
+    status: 'processing' | 'completed' | 'error' | 'skipped' | 'info';
     message?: string;
 }
 
@@ -54,7 +54,9 @@ const TopicQueueProgress: React.FC<TopicQueueProgressProps> = ({ logs, isProcess
                                 ? 'border-indigo-500/30 bg-indigo-500/5 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
                                 : log.status === 'skipped'
                                     ? 'border-amber-500/20 bg-amber-500/5 text-amber-500/80'
-                                    : 'border-slate-800 bg-slate-800/20 text-slate-400'
+                                    : log.status === 'info'
+                                        ? 'border-blue-500/20 bg-blue-500/5 text-blue-400'
+                                        : 'border-slate-800 bg-slate-800/20 text-slate-400'
                                 }`}
                         >
                             <div className="flex items-start justify-between gap-2">
@@ -67,7 +69,7 @@ const TopicQueueProgress: React.FC<TopicQueueProgressProps> = ({ logs, isProcess
                                     ) : (
                                         <>
                                             <span className="font-bold">
-                                                {log.status === 'skipped' ? 'Skipped: ' : 'Processing: '}
+                                                {log.status === 'skipped' ? 'Skipped: ' : log.status === 'info' ? '' : 'Processing: '}
                                             </span>
                                             <span className={log.status === 'processing' ? 'text-white' : log.status === 'skipped' ? 'text-amber-400' : 'text-slate-300'}>
                                                 {log.topic}
@@ -80,6 +82,8 @@ const TopicQueueProgress: React.FC<TopicQueueProgressProps> = ({ logs, isProcess
                                     <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
                                 ) : log.status === 'skipped' ? (
                                     <CheckCircle2 size={14} className="text-amber-500 shrink-0 opacity-50" />
+                                ) : log.status === 'info' ? (
+                                    <Clock size={14} className="text-blue-400 shrink-0" />
                                 ) : (
                                     <Loader2 size={14} className="text-indigo-400 animate-spin shrink-0" />
                                 )}
