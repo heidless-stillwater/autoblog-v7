@@ -57,7 +57,15 @@ const FrontendArticleView = () => {
 
     if (isArticle(post)) {
         title = post.topic;
-        const currentVersion = post.versions.find(v => v.id === post.currentVersionId);
+        const currentVersion = post.versions.find(v => v.id === post.currentVersionId) ||
+            post.versions.sort((a, b) => b.createdAt - a.createdAt)[0];
+
+        if (!currentVersion) {
+            console.warn('[FrontendArticleView] No versions found for article:', post.id);
+        } else if (currentVersion.id !== post.currentVersionId) {
+            console.warn('[FrontendArticleView] configured currentVersionId not found, falling back to latest:', currentVersion.id);
+        }
+
         content = currentVersion ? currentVersion.content : '';
     } else {
         // Post

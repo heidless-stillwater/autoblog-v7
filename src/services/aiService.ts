@@ -703,22 +703,37 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
 
     const guidelines = modelGuidelines || DEFAULT_NANOBANANA_GUIDELINES;
 
-    const promptText = `Analyze the following blog post and identify EXACTLY 8 major sections (including introduction, conclusion, and key subsections). 
+    // 1. Extract actual headers from content
+    const headerRegex = /^(#{1,3})\s+(.+)$/gm;
+    const headers: string[] = [];
+    let match;
+    while ((match = headerRegex.exec(content)) !== null) {
+        headers.push(match[2].trim());
+    }
+
+    const promptText = `Analyze the following blog post and create image generation prompts for the sections listed below.
+
+    CRITICAL: You MUST use the EXACT section titles provided below. Do not modify, shorten, or paraphrase them.
+
+    Available Sections (use these EXACT titles):
+    ${headers.length > 0 ? headers.map((h, i) => `${i + 1}. "${h}"`).join('\n') : 'No headers found. Please identify logical sections.'}
 
     ${guidelines}
 
     ${customInstructions ? `Additional User Instructions: ${customInstructions}` : ''}
 
     For each section, provide:
-    1. A short, descriptive "sectionTitle".
+    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly).
     2. A highly detailed image generation prompt (approx 60-100 words).
     3. Rationale: Why this visual represents this specific section.
     
-    CRITICAL CONSTRAINT: One of these 8 prompts MUST be the "Hero" prompt. 
+    CRITICAL CONSTRAINT: One of these prompts MUST be the "Hero" prompt. 
     The "Hero" visual should NOT just be a literal scene from the text, but a 'gestalt' interpretation—a high-impact conceptual visual that captures the soul and central theme of the entire article. Mark this one as "isHero: true".
     **Hero Reasoning**: For the Hero image, you MUST provide a "heroReasoning" field in the JSON explaining the conceptual choices and how they represent the article's core theme.
+    
+    If the Hero image best fits the Article Title or Introduction (which might not be in the list above), you may use "Hero Image" or the Article Title as the "sectionTitle" for that specific prompt only.
 
-    Return ONLY a JSON object. No markdown formatting.
+    Return ONLY a valid JSON object. No markdown formatting. No code comments (// or /*). No trailing commas.
 
     Post Content:
     ${content}
@@ -740,7 +755,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
                 }],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 2048,
+                    maxOutputTokens: 4096, // Increased to prevent JSON truncation
                 }
             })
         });
@@ -753,11 +768,19 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
         const data = await response.json();
         let contentStr = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        // Clean markdown code blocks
-        if (contentStr.includes('```json')) {
-            contentStr = contentStr.split('```json')[1].split('```')[0].trim();
-        } else if (contentStr.includes('```')) {
-            contentStr = contentStr.split('```')[1].split('```')[0].trim();
+        // Robust JSON extraction: Find the first '{' and the last '}'
+        const firstBrace = contentStr.indexOf('{');
+        const lastBrace = contentStr.lastIndexOf('}');
+
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            contentStr = contentStr.substring(firstBrace, lastBrace + 1);
+        } else {
+            // Fallback: try cleaning markdown if no clear JSON object found (unlikely but safe)
+            if (contentStr.includes('```json')) {
+                contentStr = contentStr.split('```json')[1].split('```')[0].trim();
+            } else if (contentStr.includes('```')) {
+                contentStr = contentStr.split('```')[1].split('```')[0].trim();
+            }
         }
 
         try {
@@ -765,7 +788,8 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
             const prompts = Array.isArray(parsed) ? parsed : (parsed.prompts || []);
             return { prompts: prompts.slice(0, 8) };
         } catch (parseError) {
-            console.error('Failed to parse Gemini response as JSON:', contentStr);
+            console.error('Failed to parse Gemini response as JSON. Raw text:', contentStr);
+            console.error('Parse Error:', parseError);
             return { prompts: [], error: 'Failed to parse AI response. The model may have returned malformed data.' };
         }
     } catch (error) {
