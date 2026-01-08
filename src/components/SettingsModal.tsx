@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { X, Save, Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { testPerplexityConnection } from '../services/perplexityTest';
-import type { ConnectionTestResult } from '../services/perplexityTest';
+import {
+    testPerplexityConnection,
+    testGeminiConnection,
+    testBraveConnection,
+    testClaudeConnection,
+    testOpenAIConnection,
+    testPersonaConnection,
+    testiAskConnection,
+    type ConnectionTestResult
+} from '../services/apiTestService';
 
 const SettingsModal = () => {
     const [isOpen, setIsOpen] = useState(false);
     const { settings, updateSettings } = useStore();
     const [localSettings, setLocalSettings] = useState(settings);
-    const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
-    const [isTesting, setIsTesting] = useState(false);
+    const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult | null>>({});
+    const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
     useEffect(() => {
         const handleOpen = () => setIsOpen(true);
@@ -20,7 +28,7 @@ const SettingsModal = () => {
     useEffect(() => {
         if (isOpen) {
             setLocalSettings(settings);
-            setTestResult(null);
+            setTestResults({});
         }
     }, [isOpen, settings]);
 
@@ -29,31 +37,101 @@ const SettingsModal = () => {
         setIsOpen(false);
     };
 
-    const handleTestConnection = async () => {
-        setIsTesting(true);
-        setTestResult(null);
+    const handleRunTest = async (provider: string, testFn: (settings: any) => Promise<ConnectionTestResult>) => {
+        setTestingProvider(provider);
+        // Clear previous result for this provider
+        setTestResults(prev => ({ ...prev, [provider]: null }));
 
-        // Use current local settings for test
-        const result = await testPerplexityConnection(localSettings);
-        setTestResult(result);
-        setIsTesting(false);
+        const result = await testFn(localSettings);
+
+        setTestResults(prev => ({ ...prev, [provider]: result }));
+        setTestingProvider(null);
+    };
+
+    const renderTestResult = (provider: string) => {
+        const result = testResults[provider];
+        if (!result) return null;
+
+        return (
+            <div className={`mt-2 p-3 rounded-lg border text-sm animate-in fade-in slide-in-from-top-1 duration-200 ${result.success
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                : 'bg-red-500/10 border-red-500/30 text-red-300'
+                }`}>
+                <div className="flex items-start gap-2">
+                    {result.success ? (
+                        <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                    ) : (
+                        <XCircle size={16} className="shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                        <p className="font-semibold mb-1 text-xs">
+                            {result.success ? '✅ Connection Successful' : '❌ Connection Failed'}
+                        </p>
+                        {result.success && result.responseTime && (
+                            <p className="text-[10px] opacity-80">• Response time: {result.responseTime}ms</p>
+                        )}
+                        {result.details && <p className="text-[10px] opacity-80">• {result.details}</p>}
+                        {result.error && <p className="text-[10px] opacity-80">{result.error}</p>}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderApiKeyField = (
+        label: string,
+        provider: string,
+        value: string,
+        onChange: (val: string) => void,
+        testFn: (settings: any) => Promise<ConnectionTestResult>,
+        placeholder?: string
+    ) => {
+        const isTesting = testingProvider === provider;
+
+        return (
+            <div>
+                <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-slate-400">{label}</label>
+                    <button
+                        onClick={() => handleRunTest(provider, testFn)}
+                        disabled={isTesting || !value && provider !== 'iask'}
+                        className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 rounded flex items-center gap-1 transition-colors border border-slate-700"
+                    >
+                        {isTesting ? <Loader2 size={10} className="animate-spin" /> : <Zap size={10} />}
+                        <span>{isTesting ? 'Testing...' : 'Test'}</span>
+                    </button>
+                </div>
+                <input
+                    type="password"
+                    placeholder={placeholder}
+                    value={value || ''}
+                    onChange={(e) => {
+                        onChange(e.target.value);
+                        setTestResults(prev => ({ ...prev, [provider]: null }));
+                    }}
+                    className="input-field"
+                />
+                {renderTestResult(provider)}
+            </div>
+        );
     };
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl animate-scale-up max-h-[90vh] overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl animate-scale-up max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-white">Settings</h2>
-                    <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
+                    <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
-                <div className="space-y-6">
-                    <div>
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-wider mb-3 border-b border-indigo-500/20 pb-1">General Settings</h3>
+                <div className="space-y-8">
+                    {/* General Settings */}
+                    <section>
+                        <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 border-b border-indigo-500/10 pb-2">General</h3>
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Site Title</label>
@@ -73,204 +151,148 @@ const SettingsModal = () => {
                                     className="input-field"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Theme</label>
-                                <select
-                                    value={localSettings.theme}
-                                    // @ts-ignore
-                                    onChange={(e) => setLocalSettings({ ...localSettings, theme: e.target.value })}
-                                    className="input-field appearance-none cursor-pointer"
-                                >
-                                    <option value="system">System</option>
-                                    <option value="dark">Dark</option>
-                                    <option value="light">Light</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Article Default Wordcount</label>
-                                <input
-                                    type="number"
-                                    min="500"
-                                    step="500"
-                                    value={localSettings.articleDefaultWordCount || 4000}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, articleDefaultWordCount: parseInt(e.target.value) || 4000 })}
-                                    className="input-field"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-3 border-b border-emerald-500/20 pb-1">"Debater" Tools</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="block text-sm font-medium text-slate-400">Perplexity API Key</label>
-                                    <button
-                                        onClick={handleTestConnection}
-                                        disabled={isTesting || !localSettings.perplexityApiKey}
-                                        className="text-xs px-2 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded flex items-center gap-1 transition-colors"
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Theme</label>
+                                    <select
+                                        value={localSettings.theme}
+                                        // @ts-ignore
+                                        onChange={(e) => setLocalSettings({ ...localSettings, theme: e.target.value })}
+                                        className="input-field appearance-none cursor-pointer"
                                     >
-                                        {isTesting ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-                                        <span>{isTesting ? 'Testing...' : 'Test Connection'}</span>
-                                    </button>
+                                        <option value="system">System</option>
+                                        <option value="dark">Dark</option>
+                                        <option value="light">Light</option>
+                                    </select>
                                 </div>
-                                <input
-                                    type="password"
-                                    placeholder="pplx-..."
-                                    value={localSettings.perplexityApiKey}
-                                    onChange={(e) => {
-                                        setLocalSettings({ ...localSettings, perplexityApiKey: e.target.value });
-                                        setTestResult(null);
-                                    }}
-                                    className="input-field"
-                                />
-                                {testResult && (
-                                    <div className={`mt-2 p-3 rounded-lg border text-sm ${testResult.success
-                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                        : 'bg-red-500/10 border-red-500/30 text-red-300'
-                                        }`}>
-                                        <div className="flex items-start gap-2">
-                                            {testResult.success ? (
-                                                <CheckCircle size={16} className="shrink-0 mt-0.5" />
-                                            ) : (
-                                                <XCircle size={16} className="shrink-0 mt-0.5" />
-                                            )}
-                                            <div className="flex-1">
-                                                {testResult.success ? (
-                                                    <>
-                                                        <p className="font-semibold mb-1 text-xs">✅ Connection Successful</p>
-                                                        <div className="text-[10px] opacity-80 space-y-0.5">
-                                                            <p>• Response time: {testResult.responseTime}ms</p>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <p className="font-semibold mb-1 text-xs">❌ Connection Failed</p>
-                                                        <p className="text-[10px] opacity-80">{testResult.error}</p>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Brave API Key</label>
-                                <input
-                                    type="password"
-                                    placeholder="BSA..."
-                                    value={localSettings.braveApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, braveApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Claude API Key</label>
-                                <input
-                                    type="password"
-                                    placeholder="sk-ant-..."
-                                    value={localSettings.claudeApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, claudeApiKey: e.target.value })}
-                                    className="input-field"
-                                />
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Default Wordcount</label>
+                                    <input
+                                        type="number"
+                                        min="500"
+                                        step="500"
+                                        value={localSettings.articleDefaultWordCount || 4000}
+                                        onChange={(e) => setLocalSettings({ ...localSettings, articleDefaultWordCount: parseInt(e.target.value) || 4000 })}
+                                        className="input-field"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div>
-                        <h3 className="text-sm font-bold text-purple-400 uppercase tracking-wider mb-3 border-b border-purple-500/20 pb-1">"Muse" Tools</h3>
+                    {/* Debater Tools */}
+                    <section>
+                        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4 border-b border-emerald-500/10 pb-2">Research (Debater)</h3>
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Sudowrite API Key</label>
-                                <input
-                                    type="password"
-                                    value={localSettings.sudowriteApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, sudowriteApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Novelcrafter API Key</label>
-                                <input
-                                    type="password"
-                                    value={localSettings.novelcrafterApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, novelcrafterApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Character.ai Token</label>
-                                <input
-                                    type="password"
-                                    value={localSettings.characterAiApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, characterAiApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
+                            {renderApiKeyField(
+                                "Perplexity API Key",
+                                "perplexity",
+                                localSettings.perplexityApiKey,
+                                (v) => setLocalSettings({ ...localSettings, perplexityApiKey: v }),
+                                testPerplexityConnection,
+                                "pplx-..."
+                            )}
+                            {renderApiKeyField(
+                                "Brave API Key",
+                                "brave",
+                                localSettings.braveApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, braveApiKey: v }),
+                                testBraveConnection,
+                                "BSA..."
+                            )}
+                            {renderApiKeyField(
+                                "Claude API Key",
+                                "claude",
+                                localSettings.claudeApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, claudeApiKey: v }),
+                                testClaudeConnection,
+                                "sk-ant-..."
+                            )}
                         </div>
-                    </div>
+                    </section>
 
-                    <div>
-                        <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider mb-3 border-b border-amber-500/20 pb-1">"Analyst" Tools</h3>
+                    {/* Analyst Tools */}
+                    <section>
+                        <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 border-b border-amber-500/10 pb-2">Intelligence (Analyst)</h3>
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Gemini API Key</label>
-                                <input
-                                    type="password"
-                                    placeholder="AIza..."
-                                    value={localSettings.geminiApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, geminiApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">ChatGPT (OpenAI) API Key</label>
-                                <input
-                                    type="password"
-                                    placeholder="sk-..."
-                                    value={localSettings.chatgptApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, chatgptApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">iAsk.ai API Key (Optional)</label>
-                                <input
-                                    type="password"
-                                    value={localSettings.iaskAiApiKey || ''}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, iaskAiApiKey: e.target.value })}
-                                    className="input-field"
-                                />
-                            </div>
+                            {renderApiKeyField(
+                                "Gemini API Key",
+                                "gemini",
+                                localSettings.geminiApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, geminiApiKey: v }),
+                                testGeminiConnection,
+                                "AIza..."
+                            )}
+                            {renderApiKeyField(
+                                "ChatGPT (OpenAI) API Key",
+                                "openai",
+                                localSettings.chatgptApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, chatgptApiKey: v }),
+                                testOpenAIConnection,
+                                "sk-..."
+                            )}
+                            {renderApiKeyField(
+                                "iAsk.ai API Key (Optional)",
+                                "iask",
+                                localSettings.iaskAiApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, iaskAiApiKey: v }),
+                                testiAskConnection
+                            )}
                         </div>
-                    </div>
+                    </section>
 
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-700 pb-1">Automation</h3>
+                    {/* Muse Tools */}
+                    <section>
+                        <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-4 border-b border-purple-500/10 pb-2">Creative (Muse)</h3>
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">Queue Process Interval (minutes)</label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="60"
-                                    value={localSettings.queueProcessInterval || 1}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, queueProcessInterval: parseInt(e.target.value) || 1 })}
-                                    className="input-field"
-                                />
-                            </div>
+                            {renderApiKeyField(
+                                "Sudowrite API Key",
+                                "sudowrite",
+                                localSettings.sudowriteApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, sudowriteApiKey: v }),
+                                (s) => testPersonaConnection(s, "sudowrite")
+                            )}
+                            {renderApiKeyField(
+                                "Novelcrafter API Key",
+                                "novelcrafter",
+                                localSettings.novelcrafterApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, novelcrafterApiKey: v }),
+                                (s) => testPersonaConnection(s, "novelcrafter")
+                            )}
+                            {renderApiKeyField(
+                                "Character.ai Token",
+                                "characterAi",
+                                localSettings.characterAiApiKey || '',
+                                (v) => setLocalSettings({ ...localSettings, characterAiApiKey: v }),
+                                (s) => testPersonaConnection(s, "characterAi")
+                            )}
                         </div>
-                    </div>
+                    </section>
+
+                    {/* Automation */}
+                    <section>
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Automation</h3>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Queue Process Interval (minutes)</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={localSettings.queueProcessInterval || 1}
+                                onChange={(e) => setLocalSettings({ ...localSettings, queueProcessInterval: parseInt(e.target.value) || 1 })}
+                                className="input-field"
+                            />
+                        </div>
+                    </section>
                 </div>
 
-                <div className="mt-8 flex justify-end">
+                <div className="mt-10 flex justify-end">
                     <button
                         onClick={handleSave}
-                        className="btn-primary flex items-center gap-2"
+                        className="btn-primary py-2.5 px-6 flex items-center gap-2 group"
                     >
-                        <Save size={18} />
-                        <span>Save Changes</span>
+                        <Save size={18} className="group-hover:scale-110 transition-transform" />
+                        <span>Save Settings</span>
                     </button>
                 </div>
             </div>
