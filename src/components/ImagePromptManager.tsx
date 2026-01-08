@@ -511,6 +511,11 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 }
             }
 
+            // Append layout instructions if present (from local article config)
+            if (layoutConfig.instructions && layoutConfig.instructions.trim()) {
+                finalPromptText = `${finalPromptText}. Guidance: ${layoutConfig.instructions.trim()}`;
+            }
+
             const result = await generateImage(finalPromptText, settings);
             if (result.error) {
                 setError(result.error);
