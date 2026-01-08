@@ -36,6 +36,7 @@ interface AppState {
 
     // Media Actions
     addMedia: (item: Omit<MediaItem, 'id'>) => Promise<void>;
+    updateMedia: (id: string, updates: Partial<MediaItem>) => Promise<void>;
     deleteMedia: (id: string) => Promise<void>;
 
     // Settings Actions
@@ -287,6 +288,26 @@ export const useStore = create<AppState>()((set, get) => ({
             }));
         } catch (error) {
             console.error('Error adding media:', error);
+            set({ isLoading: false });
+            throw error;
+        }
+    },
+
+    updateMedia: async (id, updates) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        set({ isLoading: true });
+        try {
+            await mediaService.update(user.uid, id, updates);
+            set((state) => ({
+                media: state.media.map((item) =>
+                    item.id === id ? { ...item, ...updates } : item
+                ),
+                isLoading: false
+            }));
+        } catch (error) {
+            console.error('Error updating media:', error);
             set({ isLoading: false });
             throw error;
         }

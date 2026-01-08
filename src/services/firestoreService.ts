@@ -104,6 +104,15 @@ export const mediaService = {
         return docRef.id;
     },
 
+    async update(userId: string, itemId: string, updates: Partial<MediaItem>): Promise<void> {
+        const itemRef = doc(db, 'users', userId, 'media', itemId);
+        const updateData: any = { ...updates };
+        if (updateData.createdAt) {
+            updateData.createdAt = Timestamp.fromMillis(updateData.createdAt);
+        }
+        await updateDoc(itemRef, updateData);
+    },
+
     async delete(userId: string, itemId: string): Promise<void> {
         const itemRef = doc(db, 'users', userId, 'media', itemId);
         await deleteDoc(itemRef);

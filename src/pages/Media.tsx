@@ -9,17 +9,41 @@ import {
     Copy,
     Check,
     Download,
-    RefreshCw
+    RefreshCw,
+    LayoutGrid,
+    List
 } from 'lucide-react';
 import clsx from 'clsx';
 import ConfirmModal from '../components/ConfirmModal';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { Sparkles } from 'lucide-react';
 
 const Media = () => {
-    const { media, addMedia, deleteMedia, posts } = useStore();
+    const { media, addMedia, updateMedia, deleteMedia, posts } = useStore();
     const [search, setSearch] = useState('');
-    const [dragActive, setDragActive] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+    // Selection State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // ZIP & Progress State
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [progress, setProgress] = useState<{
+        percent: number;
+        message: string;
+    } | null>(null);
+
+    // Conflict Resolution State
+    const [conflict, setConflict] = useState<{
+        file: File;
+        existing: MediaItem;
+        onResolve: (action: 'replace' | 'skip', applyToAll: boolean) => void;
+    } | null>(null);
+    const [rememberedAction, setRememberedAction] = useState<'replace' | 'skip' | null>(null);
+
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
         onConfirm: () => void;
@@ -97,44 +121,104 @@ const Media = () => {
         setSyncing(false);
     };
 
+    const processFile = async (file: File | Blob, name: string) => {
+        const existing = media.find(m => m.name === name);
+
+        if (existing && !rememberedAction) {
+            return new Promise<'replace' | 'skip'>(resolve => {
+                setConflict({
+                    file: file as File,
+                    existing,
+                    onResolve: (action, applyToAll) => {
+                        if (applyToAll) setRememberedAction(action);
+                        setConflict(null);
+                        resolve(action);
+                    }
+                });
+            });
+        }
+
+        const action = rememberedAction || 'replace';
+        return action;
+    };
+
+    const saveMediaFile = async (file: File | Blob, name: string, type: string, action: 'replace' | 'skip') => {
+        if (action === 'skip') return;
+
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve) => {
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+        });
+
+        const existing = media.find(m => m.name === name);
+        if (existing) {
+            await updateMedia(existing.id, {
+                url: dataUrl,
+                size: file.size,
+                type: type,
+                createdAt: Date.now()
+            });
+        } else {
+            await addMedia({
+                name,
+                type,
+                url: dataUrl,
+                createdAt: Date.now(),
+                size: file.size
+            });
+        }
+    };
+
     const handleUpload = async (files: FileList | null) => {
         if (!files) return;
+        setIsProcessing(true);
+        setRememberedAction(null);
+        const fileArray = Array.from(files);
 
-        for (const file of Array.from(files)) {
-            if (!file.type.startsWith('image/')) continue;
+        try {
+            for (let i = 0; i < fileArray.length; i++) {
+                const file = fileArray[i];
 
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                await addMedia({
-                    name: file.name,
-                    type: file.type,
-                    url: e.target?.result as string,
-                    createdAt: Date.now(),
-                    size: file.size
-                });
-            };
-            reader.readAsDataURL(file);
+                if (file.name.endsWith('.zip')) {
+                    setProgress({ percent: 0, message: `Extracting ${file.name}...` });
+                    const zip = new JSZip();
+                    const zipContent = await zip.loadAsync(file);
+                    const zipFiles = Object.values(zipContent.files).filter(f => !f.dir && f.name.match(/\.(jpg|jpeg|png|webp|gif)$/i));
+
+                    for (let j = 0; j < zipFiles.length; j++) {
+                        const zf = zipFiles[j];
+                        const blob = await zf.async('blob');
+                        const progressPercent = Math.round((j / zipFiles.length) * 100);
+                        setProgress({ percent: progressPercent, message: `Processing ${zf.name} from ZIP...` });
+
+                        const action = await processFile(blob, zf.name); // simplified type detection
+                        await saveMediaFile(blob, zf.name, 'image/jpeg', action);
+                    }
+                } else if (file.type.startsWith('image/')) {
+                    const progressPercent = Math.round((i / fileArray.length) * 100);
+                    setProgress({ percent: progressPercent, message: `Uploading ${file.name}...` });
+
+                    const action = await processFile(file, file.name);
+                    await saveMediaFile(file, file.name, file.type, action);
+                }
+            }
+            setProgress({ percent: 100, message: 'Upload complete!' });
+            setTimeout(() => setProgress(null), 2000);
+        } catch (error) {
+            console.error('Upload Error:', error);
+            setConfirmModal({
+                message: 'Error during upload. Some files may have failed.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
+        } finally {
+            setIsProcessing(false);
+            setRememberedAction(null);
         }
     };
 
-    const handleDrag = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.type === "dragenter" || e.type === "dragover") {
-            setDragActive(true);
-        } else if (e.type === "dragleave") {
-            setDragActive(false);
-        }
-    };
 
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragActive(false);
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            handleUpload(e.dataTransfer.files);
-        }
-    };
 
     const copyToClipboard = (url: string, id: string) => {
         navigator.clipboard.writeText(url);
@@ -165,148 +249,426 @@ const Media = () => {
         document.body.removeChild(link);
     };
 
-    const handleDownloadAll = () => {
-        if (filteredMedia.length === 0) return;
-
-        filteredMedia.forEach((item, index) => {
-            setTimeout(() => {
-                const link = document.createElement('a');
-                link.href = item.url;
-                link.download = item.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }, index * 100); // Stagger downloads to avoid browser blocking
+    const toggleSelect = (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
         });
     };
 
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredMedia.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredMedia.map(m => m.id)));
+        }
+    };
+
+    const handleDownloadSelectedZip = async () => {
+        const selectedMedia = media.filter(m => selectedIds.has(m.id));
+        if (selectedMedia.length === 0) return;
+
+        const timestamp = format(new Date(), 'yyyyMMdd-HHmm');
+        const defaultName = `blog-media-collection-${timestamp}`;
+        const fileName = prompt('Enter a name for your ZIP file:', defaultName);
+
+        if (fileName === null) return; // Cancelled
+
+        setIsProcessing(true);
+        setProgress({ percent: 0, message: 'Initialising ZIP generator...' });
+
+        try {
+            const zip = new JSZip();
+            const total = selectedMedia.length;
+
+            for (let i = 0; i < selectedMedia.length; i++) {
+                const item = selectedMedia[i];
+                const progressPercent = Math.round((i / total) * 100);
+                setProgress({
+                    percent: progressPercent,
+                    message: `Adding ${item.name} (${i + 1}/${total})...`
+                });
+
+                // Fetch the image data
+                const response = await fetch(item.url);
+                const blob = await response.blob();
+                zip.file(item.name, blob);
+            }
+
+            setProgress({ percent: 95, message: 'Compressing files...' });
+            const content = await zip.generateAsync({ type: 'blob' });
+
+            setProgress({ percent: 100, message: 'Download ready!' });
+            saveAs(content, `${fileName || defaultName}.zip`);
+
+            setTimeout(() => setProgress(null), 2000);
+        } catch (error) {
+            console.error('ZIP Error:', error);
+            setConfirmModal({
+                message: 'Failed to create ZIP file. Some images might be inaccessible.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
+            setProgress(null);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6 pb-20 relative">
+            {/* ZIP Progress */}
+            {progress && (
+                <div className="fixed top-24 left-1/2 -translate-x-1/2 w-full max-w-lg z-[100] px-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-slate-900/95 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-4 shadow-2xl shadow-indigo-500/10">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-medium text-indigo-400 flex items-center gap-2">
+                                <Sparkles size={16} className="animate-pulse" />
+                                {progress.message}
+                            </span>
+                            <span className="text-xs font-mono text-slate-500">{Math.round(progress.percent)}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-500 ease-out"
+                                style={{ width: `${progress.percent}%` }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Conflict Modal */}
+            {conflict && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-2">File Already Exists</h3>
+                        <p className="text-slate-400 mb-6">
+                            A file named <span className="text-indigo-400 font-mono">"{conflict.existing.name}"</span> already exists in your library.
+                        </p>
+
+                        <div className="flex gap-4 mb-6">
+                            <div className="flex-1 text-center">
+                                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-bold">New File</p>
+                                <div className="aspect-square rounded-lg bg-slate-800 overflow-hidden border border-slate-700">
+                                    <img src={URL.createObjectURL(conflict.file)} alt="New" className="w-full h-full object-cover" />
+                                </div>
+                            </div>
+                            <div className="flex-1 text-center">
+                                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-bold">Existing</p>
+                                <div className="aspect-square rounded-lg bg-slate-800 overflow-hidden border border-slate-700">
+                                    <img src={conflict.existing.url} alt="Existing" className="w-full h-full object-cover" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center gap-3 mb-2">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        id="apply-to-all"
+                                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                    />
+                                    <span className="text-sm text-slate-400 group-hover:text-slate-300">Apply to remaining files</span>
+                                </label>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        const applyToAll = (document.getElementById('apply-to-all') as HTMLInputElement)?.checked;
+                                        conflict.onResolve('skip', applyToAll);
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                                >
+                                    Skip
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const applyToAll = (document.getElementById('apply-to-all') as HTMLInputElement)?.checked;
+                                        conflict.onResolve('replace', applyToAll);
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-bold"
+                                >
+                                    Replace
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-white">Media Library</h1>
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={() => inputRef.current?.click()}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+                        title="Upload images or ZIP"
+                    >
+                        <Upload size={18} />
+                        <span className="hidden sm:inline">Upload</span>
+                    </button>
+                    <button
                         onClick={syncMediaFromPosts}
-                        disabled={syncing}
+                        disabled={syncing || isProcessing}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors disabled:opacity-50"
                         title="Sync media from posts"
                     >
                         <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
                         <span className="hidden sm:inline">Sync from Posts</span>
                     </button>
-                    <button
-                        onClick={handleDownloadAll}
-                        disabled={filteredMedia.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                        title="Download all media"
-                    >
-                        <Download size={18} />
-                        <span className="hidden sm:inline">Download All</span>
-                    </button>
+                    {selectedIds.size > 0 && (
+                        <button
+                            onClick={handleDownloadSelectedZip}
+                            disabled={isProcessing}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 animate-in fade-in slide-in-from-right-4"
+                            title="Download selected media as ZIP"
+                        >
+                            <Download size={18} />
+                            <span className="hidden sm:inline">Download Selected ({selectedIds.size})</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* Upload Area */}
-            <div
-                className={clsx(
-                    "relative border-2 border-dashed rounded-xl p-8 transition-all duration-300 flex flex-col items-center justify-center min-h-[200px] text-center",
-                    dragActive
-                        ? "border-indigo-500 bg-indigo-500/10 scale-[1.01]"
-                        : "border-slate-700 bg-slate-900/30 hover:border-slate-600"
-                )}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-            >
-                <input
-                    ref={inputRef}
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleUpload(e.target.files)}
-                />
-
-                <div className="bg-slate-800 p-4 rounded-full mb-4 ring-8 ring-slate-800/50">
-                    <Upload className="text-indigo-400" size={32} />
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">Upload Files</h3>
-                <p className="text-slate-400 max-w-sm mb-6">
-                    Drag & drop images here or click to browse. Supported formats: JPG, PNG, WEBP.
-                </p>
-                <button
-                    onClick={() => inputRef.current?.click()}
-                    className="btn-primary"
-                >
-                    Select Files
-                </button>
-            </div>
+            <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept="image/*,.zip"
+                className="hidden"
+                onChange={(e) => handleUpload(e.target.files)}
+            />
 
             {/* Toolbar */}
-            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm flex items-center justify-between">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Search media..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="input-field pl-10"
-                    />
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1">
+                    <div className="flex items-center gap-2 px-2 border-r border-slate-800 pr-4">
+                        <input
+                            type="checkbox"
+                            checked={selectedIds.size === filteredMedia.length && filteredMedia.length > 0}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                        />
+                        <span className="text-sm text-slate-400 font-medium whitespace-nowrap">
+                            {selectedIds.size > 0 ? `${selectedIds.size} Selected` : 'Select All'}
+                        </span>
+                    </div>
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search media..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="input-field pl-10"
+                        />
+                    </div>
                 </div>
-                <div className="text-slate-500 text-sm">
+
+                <div className="flex items-center gap-2 p-1 bg-slate-800 rounded-lg">
+                    <button
+                        onClick={() => setViewMode('grid')}
+                        className={clsx(
+                            "p-1.5 rounded-md transition-all",
+                            viewMode === 'grid'
+                                ? "bg-indigo-600 text-white shadow-lg"
+                                : "text-slate-400 hover:text-slate-200"
+                        )}
+                        title="Grid View"
+                    >
+                        <LayoutGrid size={18} />
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={clsx(
+                            "p-1.5 rounded-md transition-all",
+                            viewMode === 'list'
+                                ? "bg-indigo-600 text-white shadow-lg"
+                                : "text-slate-400 hover:text-slate-200"
+                        )}
+                        title="List View"
+                    >
+                        <List size={18} />
+                    </button>
+                </div>
+
+                <div className="text-slate-500 text-sm hidden lg:block">
                     {filteredMedia.length} Items
                 </div>
             </div>
 
-            {/* Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {filteredMedia.map(item => (
-                    <div
-                        key={item.id}
-                        className="group relative aspect-square bg-slate-900 border border-slate-800 rounded-lg overflow-hidden"
-                    >
-                        <img
-                            src={item.url}
-                            alt={item.name}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        />
+            {/* Content Area */}
+            {viewMode === 'grid' ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {filteredMedia.map(item => (
+                        <div
+                            key={item.id}
+                            onClick={() => toggleSelect(item.id)}
+                            className={clsx(
+                                "group relative aspect-square bg-slate-900 border rounded-lg overflow-hidden cursor-pointer transition-all duration-300",
+                                selectedIds.has(item.id) ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-slate-800 hover:border-slate-700"
+                            )}
+                        >
+                            <img
+                                src={item.url}
+                                alt={item.name}
+                                className={clsx(
+                                    "w-full h-full object-cover transition-transform duration-500 group-hover:scale-110",
+                                    selectedIds.has(item.id) && "scale-105 opacity-80"
+                                )}
+                            />
 
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                            <p className="text-xs text-white truncate mb-1">{item.name}</p>
-                            <p className="text-[10px] text-slate-400">
-                                {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB • ` : ''}
-                                {format(item.createdAt, 'MMM d')}
-                            </p>
-                        </div>
+                            {/* Selection Checkbox */}
+                            <div className={clsx(
+                                "absolute top-2 left-2 z-10 transition-all duration-300",
+                                selectedIds.has(item.id) ? "opacity-100 scale-100" : "opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100"
+                            )}>
+                                <div className={clsx(
+                                    "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                                    selectedIds.has(item.id) ? "bg-indigo-600 border-indigo-500" : "bg-black/40 border-white/20 backdrop-blur"
+                                )}>
+                                    {selectedIds.has(item.id) && <Check size={12} className="text-white font-bold" />}
+                                </div>
+                            </div>
 
-                        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                                onClick={(e) => handleDownload(item, e)}
-                                className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
-                                title="Download"
-                            >
-                                <Download size={14} />
-                            </button>
-                            <button
-                                onClick={() => copyToClipboard(item.url, item.id)}
-                                className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
-                                title="Copy URL"
-                            >
-                                {copiedId === item.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                            </button>
-                            <button
-                                onClick={(e) => handleDelete(item.id, e)}
-                                className="p-1.5 bg-red-500/80 hover:bg-red-600 rounded text-white backdrop-blur"
-                                title="Delete"
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                                <p className="text-xs text-white truncate mb-1">{item.name}</p>
+                                <p className="text-[10px] text-slate-400">
+                                    {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB • ` : ''}
+                                    {format(item.createdAt, 'MMM d')}
+                                </p>
+                            </div>
+
+                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDownload(item, e); }}
+                                    className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
+                                    title="Download"
+                                >
+                                    <Download size={14} />
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(item.url, item.id); }}
+                                    className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
+                                    title="Copy URL"
+                                >
+                                    {copiedId === item.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id, e); }}
+                                    className="p-1.5 bg-red-500/80 hover:bg-red-600 rounded text-white backdrop-blur"
+                                    title="Delete"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden backdrop-blur-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-800 bg-slate-950/30">
+                                    <th className="p-4 w-12">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.size === filteredMedia.length && filteredMedia.length > 0}
+                                            onChange={toggleSelectAll}
+                                            className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                                        />
+                                    </th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Preview</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Details</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
+                                    <th className="p-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {filteredMedia.map(item => (
+                                    <tr
+                                        key={item.id}
+                                        onClick={() => toggleSelect(item.id)}
+                                        className={clsx(
+                                            "group hover:bg-slate-800/30 transition-colors cursor-pointer",
+                                            selectedIds.has(item.id) && "bg-indigo-500/5"
+                                        )}
+                                    >
+                                        <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(item.id)}
+                                                onChange={() => toggleSelect(item.id)}
+                                                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 cursor-pointer"
+                                            />
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="w-10 h-10 rounded border border-slate-700 overflow-hidden bg-slate-800">
+                                                <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-slate-200 truncate max-w-[200px] sm:max-w-xs">{item.name}</span>
+                                                <span className="text-[10px] text-slate-500 md:hidden">
+                                                    {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB` : ''} • {item.type.split('/')[1] || item.type}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 hidden md:table-cell">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="text-xs text-slate-400 capitalize">{item.type.split('/')[1] || item.type}</span>
+                                                <span className="text-[10px] text-slate-500">
+                                                    {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB` : 'Size unknown'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 hidden lg:table-cell">
+                                            <span className="text-xs text-slate-500 whitespace-nowrap">
+                                                {format(item.createdAt, 'MMM d, yyyy')}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDownload(item, e); }}
+                                                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
+                                                    title="Download"
+                                                >
+                                                    <Download size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(item.url, item.id); }}
+                                                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
+                                                    title="Copy URL"
+                                                >
+                                                    {copiedId === item.id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id, e); }}
+                                                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
             {filteredMedia.length === 0 && (
                 <div className="text-center py-12 text-slate-500">
                     No media files found.
