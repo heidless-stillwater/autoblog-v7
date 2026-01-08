@@ -724,6 +724,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
 
     Available Sections (use these EXACT titles):
     ${headers.length > 0 ? headers.map((h, i) => `${i + 1}. "${h}"`).join('\n') : 'No headers found. Please identify logical sections.'}
+    *. "Introduction" (Use this for the very top of the article, even if not a literal header)
 
     ${guidelines}
 
@@ -731,7 +732,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     ${customInstructions ? `Additional Style/User Instructions:\n${customInstructions}` : ''}
 
     For each section, provide:
-    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly, or "Hero Image" if applicable).
+    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly, "Introduction" for the top, or "Hero Image" if applicable).
     2. A highly detailed image generation prompt (approx 60-100 words).
     3. Rationale: Why this visual represents this specific section.
     
@@ -740,7 +741,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     The "Hero" visual should NOT just be a literal scene from the text, but a 'gestalt' interpretation—a high-impact conceptual visual that captures the soul and central theme of the entire article. Mark this one as "isHero: true".
     **Hero Reasoning**: For the Hero image, you MUST provide a "heroReasoning" field in the JSON explaining the conceptual choices and how they represent the article's core theme.
     
-    If the Hero image best fits the Article Title or Introduction (which might not be in the list above), you may use "Hero Image" or the Article Title as the "sectionTitle" for that specific prompt only.
+    If the Hero image best fits the Article Title or Introduction, you may use "Hero Image", "Introduction", or the Article Title as the "sectionTitle" for that specific prompt only.
     ` : `
     CRITICAL CONSTRAINT: Do NOT generate a "Hero" image. Do NOT set "isHero" to true for any prompt. Focus only on the body content sections.
     `}

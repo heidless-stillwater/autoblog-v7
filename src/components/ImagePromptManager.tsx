@@ -423,9 +423,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const lowerTitle = sectionTitle.toLowerCase();
 
-        // Special case for hero image
-        if (lowerTitle === 'hero image' || lowerTitle === 'hero') {
-            console.log('✅ Hero image detected, inserting at start');
+        // Special case for hero image or top-of-article sections
+        const topMarkers = ['hero image', 'hero', 'introduction', 'intro', 'top', 'start', 'beginning'];
+        if (topMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
+            console.log('✅ Top-of-article section detected, inserting at start');
             return 0;
         }
 
@@ -480,12 +481,9 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const insertPromptAsQuote = async (prompt: ImagePrompt) => {
         const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
         const quote = `\n> **AI Image Prompt:** ${prompt.prompt}\n\n`;
-        const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') || prompt.sectionTitle.toLowerCase() === 'intro';
         let newContent = content;
         if (headerIndex !== -1) {
             newContent = content.slice(0, headerIndex) + quote + content.slice(headerIndex);
-        } else if (isIntro) {
-            newContent = quote + content;
         } else {
             newContent = content + quote;
         }
@@ -551,12 +549,9 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 }
                 const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
-                const isIntro = prompt.sectionTitle.toLowerCase().includes('introduction') || prompt.sectionTitle.toLowerCase() === 'intro';
                 let newContent = baseContent;
                 if (headerIndex !== -1) {
                     newContent = baseContent.slice(0, headerIndex) + imageMarkdown + baseContent.slice(headerIndex);
-                } else if (isIntro) {
-                    newContent = imageMarkdown + baseContent;
                 } else {
                     newContent = baseContent + imageMarkdown;
                 }
