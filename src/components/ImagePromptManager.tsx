@@ -484,6 +484,13 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             return 0;
         }
 
+        // Special case for bottom-of-article sections
+        const bottomMarkers = ['conclusion', 'bottom', 'end', 'footer'];
+        if (bottomMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
+            console.log('✅ Bottom-of-article section detected, inserting at end');
+            return -2; // Special code for "absolute bottom" to distinguish from "not found"
+        }
+
         // Strategy 1: Exact match
         const escapedTitle = escapeRegExp(sectionTitle);
         const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
@@ -642,9 +649,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
                 let newContent = baseContent;
-                if (headerIndex !== -1) {
+                if (headerIndex >= 0) {
                     newContent = baseContent.slice(0, headerIndex) + imageMarkdown + baseContent.slice(headerIndex);
                 } else {
+                    // Handles both -1 (not found) and -2 (explicit bottom)
                     newContent = baseContent + imageMarkdown;
                 }
                 await updateImagePrompt(prompt.id, { isImageInserted: true });
@@ -854,7 +862,20 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
                                         // 2. Sequential Insertion Stage (to preserve order)
                                         let currentContent = content;
-                                        const processedList = [...selected].reverse();
+
+                                        // Detect if we are clustering at the top or bottom
+                                        // We check the first non-hero prompt's target
+                                        const firstBodyPrompt = selected.find(p => !p.isHero && p.sectionTitle.toLowerCase() !== 'hero image');
+                                        const targetIndex = firstBodyPrompt ? findHeaderIndex(firstBodyPrompt.sectionTitle, currentContent) : 0;
+
+                                        // For TOP placement (index 0), we reverse the list so that images 1, 2, 3
+                                        // result in [1, 2, 3] top-down after being pushed to index 0.
+                                        // For BOTTOM placement (-2 or -1), we use the ORIGINAL order
+                                        // so that images 1, 2, 3 results in [..., 1, 2, 3] at the end.
+                                        const shouldReverse = targetIndex === 0;
+
+                                        console.log(`📦 [Bulk Insertion] Target: ${targetIndex}, Reversed: ${shouldReverse}`);
+                                        const processedList = shouldReverse ? [...selected].reverse() : [...selected];
 
                                         for (let i = 0; i < processedList.length; i++) {
                                             const p = processedList[i];
@@ -863,8 +884,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
                                             const article = articles.find(a => a.id === articleId);
                                             const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-                                            const isLastInReversed = i === processedList.length - 1;
-                                            const shouldSetHero = isLastInReversed && !hasHero;
+
+                                            // 'shouldSetHero' flag logic
+                                            const originalIndex = selected.findIndex(item => item.id === p.id);
+                                            const shouldSetHero = originalIndex === 0 && !hasHero;
 
                                             // Re-use logic from generateAndInsertImage but without the actual generation
                                             const compressedUrl = result.compressedUrl;
@@ -886,9 +909,11 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                             } else {
                                                 const headerIndex = findHeaderIndex(p.sectionTitle, currentContent);
                                                 const imageMarkdown = `\n![${p.sectionTitle}](${compressedUrl})\n\n`;
-                                                if (headerIndex !== -1) {
+
+                                                if (headerIndex >= 0) {
                                                     currentContent = currentContent.slice(0, headerIndex) + imageMarkdown + currentContent.slice(headerIndex);
                                                 } else {
+                                                    // This handles both -1 (not found) and -2 (explicit bottom)
                                                     currentContent = currentContent + imageMarkdown;
                                                 }
                                                 await updateImagePrompt(p.id, { isImageInserted: true });

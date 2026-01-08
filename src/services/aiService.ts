@@ -724,19 +724,19 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     FRESH INTERPRETATION: Do not simply repeat common or previously generated visual interpretations. Provide a completely fresh, creative perspective for this specific request. [Request ID: ${Date.now()}]
     LAYOUT PRIORITY & FIXED PLACEMENT MODE:
     Your primary goal is to follow the "Configuration & Placement Rules" below. 
-    - **CRITICAL**: If the rules say "all at the top", "cluster at start", "put all images in section X", "contiguous at top", "one immediately above the next at the top", etc., you are in FIXED PLACEMENT MODE.
-    - In FIXED PLACEMENT MODE, you MUST use ONLY "Introduction" for ALL body images. Do NOT use any other section titles, regardless of the content.
-    - **IGNORE** the numbered headers (3 onwards) for body images in this mode.
-    - Do NOT distribute across headers.
-    - If "Include Hero" is enabled, generate exactly ONE "Hero Image" (isHero: true) and use "Introduction" (isHero: false) for ALL other requested prompts.
-    - **CRITICAL**: ONLY the "Hero Image" should have "isHero: true". Images for the "Introduction" or other sections MUST have "isHero: false".
+    - **CRITICAL**: If the rules say "all at the top", "contiguous at top", etc., you are in TOP FIXED PLACEMENT MODE. In this mode, use ONLY "Introduction" for body images.
+    - **CRITICAL**: If the rules say "all at the bottom", "contiguous at bottom", "below the next one at the bottom", etc., you are in BOTTOM FIXED PLACEMENT MODE. In this mode, use ONLY "Conclusion" for body images.
+    - In FIXED PLACEMENT MODE (Top or Bottom), do NOT use numbered headers for any images.
+    - If "Include Hero" is enabled, generate exactly ONE "Hero Image" (isHero: true) and use the fixed section title (isHero: false) for ALL other requested prompts.
+    - **CRITICAL**: ONLY the "Hero Image" should have "isHero: true". Images for "Introduction", "Conclusion", or other sections MUST have "isHero: false".
 
     CRITICAL: You MUST use the EXACT section titles provided below for the "sectionTitle" field. Do not modify, shorten, or paraphrase them.
 
     Available Sections (use these EXACT titles):
     ${includeHero ? '1. "Hero Image" (Conceptual high-impact visual for the article banner)\n' : ''}
-    ${includeHero ? '2. "Introduction" (Virtual section representing the very top of the article body)\n' : '1. "Introduction" (Virtual section representing the very top of the article body)\n'}
-    ${headers.length > 0 ? headers.map((h, i) => `${i + (includeHero ? 3 : 2)}. "${h}"`).join('\n') : ''}
+    ${includeHero ? '2. "Introduction" (Virtual section for the very top of the article body)\n' : '1. "Introduction" (Virtual section for the very top of the article body)\n'}
+    ${includeHero ? '3. "Conclusion" (Virtual section for the very bottom of the article body)\n' : '2. "Conclusion" (Virtual section for the very bottom of the article body)\n'}
+    ${headers.length > 0 ? headers.map((h, i) => `${i + (includeHero ? 4 : 3)}. "${h}"`).join('\n') : ''}
 
     ${guidelines}
 
