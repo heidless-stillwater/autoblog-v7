@@ -64,6 +64,22 @@ export interface Settings {
     imageStylePresets?: ImageStylePreset[];
     promptPresets?: PromptPreset[];
     articleDefaultWordCount?: number;
+
+    // Article Layout Configuration
+    layoutPresets?: ArticleLayoutPreset[];
+    activeLayoutPresetId?: string | null;
+    layoutNumImages?: number;
+    layoutIncludeHero?: boolean;
+    layoutInstructions?: string;
+}
+
+export interface ArticleLayoutPreset {
+    id: string;
+    name: string;
+    imageCount: number;
+    includeHero: boolean;
+    placementInstructions: string;
+    createdAt: number;
 }
 
 export type ToolCategory = 'debater' | 'muse' | 'analyst';

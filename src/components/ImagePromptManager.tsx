@@ -20,7 +20,8 @@ import {
     Loader2,
     RotateCcw
 } from 'lucide-react';
-import StyleOptionsSelector from './StyleOptionsSelector';
+
+import PromptConfigModal from './PromptConfigModal';
 import { useStore } from '../store';
 import { generateImagePrompts, generateImage, DEFAULT_NANOBANANA_GUIDELINES } from '../services/aiService';
 import type { ImagePrompt, StyleOptions, PromptPreset } from '../types';
@@ -45,7 +46,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         deleteImagePrompt,
         loadImagePrompts,
         settings,
-        updateSettings,
+
         addMedia,
         articles,
         updateArticle
@@ -75,7 +76,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         mood: ''
     });
     const [showConfig, setShowConfig] = useState(false);
-    const [presetName, setPresetName] = useState('');
+
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>('preset-standard-vintage');
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
@@ -209,49 +210,17 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         performGenerate();
     };
 
-    const handleSaveAsPreset = async () => {
-        if (!presetName.trim()) return;
 
-        const newPreset: PromptPreset = {
-            id: crypto.randomUUID(),
-            name: presetName.trim(),
-            styleOptions,
-            customInstructions,
-            modelGuidelines,
-            createdAt: Date.now()
-        };
 
-        const updatedPresets = [...(settings.promptPresets || []), newPreset];
-        await updateSettings({ promptPresets: updatedPresets });
-        setPresetName('');
-        setSelectedPresetId(newPreset.id);
-    };
 
-    const handleUpdatePreset = async () => {
-        if (!selectedPresetId) return;
-        if (selectedPresetId.startsWith('preset-standard-')) return; // Can't update standard presets
 
-        const updatedPresets = (settings.promptPresets || []).map(p =>
-            p.id === selectedPresetId
-                ? { ...p, name: presetName.trim() || p.name, styleOptions, customInstructions, modelGuidelines }
-                : p
-        );
-        await updateSettings({ promptPresets: updatedPresets });
-        setPresetName(''); // Clear after update
-    };
 
-    const handleDeletePreset = async (id: string, e?: React.MouseEvent) => {
-        e?.stopPropagation();
-        if (id.startsWith('preset-standard-')) return; // Can't delete standard presets
 
-        const updatedPresets = (settings.promptPresets || []).filter(p => p.id !== id);
-        await updateSettings({ promptPresets: updatedPresets });
-        if (selectedPresetId === id) {
+    const handleApplyPreset = (id: string | null) => {
+        if (!id) {
             setSelectedPresetId(null);
+            return;
         }
-    };
-
-    const handleApplyPreset = (id: string) => {
         const preset = allPresets.find(p => p.id === id);
         if (preset) {
             setStyleOptions(preset.styleOptions || {
@@ -266,9 +235,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         }
     };
 
-    const handleStyleUpdate = (options: StyleOptions) => {
-        setStyleOptions(options);
-    };
+
 
     const performGenerate = async () => {
         setIsGenerating(true);
@@ -662,7 +629,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                 )}
                             >
                                 <Target size={18} />
-                                <span>Prompt Config</span>
+                                <span>Article Config</span>
                             </button>
                             <button
                                 onClick={() => setIsAdding(true)}
@@ -701,148 +668,18 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     </div>
 
                     {showConfig && (
-                        <div className="p-6 bg-slate-900 border border-slate-700 rounded-2xl space-y-8 shadow-2xl animate-in slide-in-from-top-4 duration-300 mb-6">
-                            <div className="space-y-4">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                    <Sparkles size={12} className="text-indigo-400" />
-                                    Visual Style Overrides
-                                </h4>
-                                <StyleOptionsSelector options={styleOptions} onUpdate={handleStyleUpdate} />
-                            </div>
-
-                            <div className="space-y-4 border-t border-slate-800 pt-6">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                        <Save size={12} className="text-emerald-400" />
-                                        Prompt Presets
-                                    </h4>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={presetName}
-                                            onChange={(e) => setPresetName(e.target.value)}
-                                            placeholder="New Preset Name..."
-                                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500/50 outline-none"
-                                        />
-                                        <button
-                                            onClick={handleSaveAsPreset}
-                                            disabled={!presetName.trim()}
-                                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider disabled:opacity-50 flex items-center gap-1"
-                                            title="Save as New Preset"
-                                        >
-                                            <Plus size={12} />
-                                            Save New
-                                        </button>
-                                        {selectedPresetId && (
-                                            <button
-                                                onClick={handleUpdatePreset}
-                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg uppercase tracking-wider flex items-center gap-1"
-                                                title="Save Changes to Selected Preset"
-                                            >
-                                                <Save size={12} />
-                                                Update Selected
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="relative group">
-                                        <select
-                                            value={selectedPresetId || ''}
-                                            onChange={(e) => handleApplyPreset(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-300 focus:ring-1 focus:ring-indigo-500/50 outline-none appearance-none hover:border-slate-700 transition-colors"
-                                        >
-                                            <option value="" disabled>Select a Preset...</option>
-                                            <optgroup label="Standard Styles">
-                                                {STANDARD_PRESETS.map((preset) => (
-                                                    <option key={preset.id} value={preset.id}>
-                                                        {preset.name}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                            {(settings.promptPresets || []).length > 0 && (
-                                                <optgroup label="My Presets">
-                                                    {(settings.promptPresets || []).map((preset) => (
-                                                        <option key={preset.id} value={preset.id}>
-                                                            {preset.name}
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                            )}
-                                        </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                            <ChevronDown size={14} />
-                                        </div>
-                                    </div>
-
-                                    {selectedPresetId && !selectedPresetId.startsWith('preset-standard-') && (
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => {
-                                                    const preset = allPresets.find(p => p.id === selectedPresetId);
-                                                    if (preset) {
-                                                        setPresetName(preset.name);
-                                                    }
-                                                }}
-                                                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-slate-700"
-                                            >
-                                                <Edit2 size={14} />
-                                                Rename
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setConfirmModal({
-                                                        message: 'Are you sure you want to delete this preset?',
-                                                        confirmText: 'Delete Preset',
-                                                        onConfirm: () => {
-                                                            handleDeletePreset(selectedPresetId);
-                                                            setConfirmModal(null);
-                                                        },
-                                                        onCancel: () => setConfirmModal(null)
-                                                    });
-                                                }}
-                                                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-red-500/20"
-                                            >
-                                                <Trash2 size={14} />
-                                                Delete
-                                            </button>
-                                        </div>
-                                    )}
-                                    {selectedPresetId && selectedPresetId.startsWith('preset-standard-') && (
-                                        <div className="flex items-center justify-center px-4 py-2 bg-slate-800/30 text-slate-500 rounded-xl text-[10px] italic border border-slate-800/50">
-                                            Standard presets cannot be modified or deleted.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="space-y-4 border-t border-slate-800 pt-6">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Custom Style Instructions</h4>
-                                    <button onClick={() => setCustomInstructions('')} className="text-[10px] text-slate-500 hover:text-white uppercase font-black">Clear</button>
-                                </div>
-                                <textarea
-                                    value={customInstructions}
-                                    onChange={(e) => setCustomInstructions(e.target.value)}
-                                    placeholder="Enter specific instructions..."
-                                    rows={3}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-300 font-mono focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none"
-                                />
-                            </div>
-
-                            <div className="space-y-4 border-t border-slate-800 pt-6">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Model Guidelines</h4>
-                                    <button onClick={() => setModelGuidelines(DEFAULT_NANOBANANA_GUIDELINES)} className="text-[10px] text-indigo-400 hover:text-indigo-300 uppercase font-black">Reset</button>
-                                </div>
-                                <textarea
-                                    value={modelGuidelines}
-                                    onChange={(e) => setModelGuidelines(e.target.value)}
-                                    rows={3}
-                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-400 font-mono italic outline-none resize-none"
-                                />
-                            </div>
-                        </div>
+                        <PromptConfigModal
+                            isOpen={showConfig}
+                            onClose={() => setShowConfig(false)}
+                            styleOptions={styleOptions}
+                            onStyleUpdate={setStyleOptions}
+                            customInstructions={customInstructions}
+                            onCustomInstructionsUpdate={setCustomInstructions}
+                            modelGuidelines={modelGuidelines}
+                            onModelGuidelinesUpdate={setModelGuidelines}
+                            currentPromptPresetId={selectedPresetId}
+                            onPromptPresetChange={handleApplyPreset}
+                        />
                     )}
 
                     {selectedIds.size > 0 && (
@@ -1068,6 +905,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     </div>
                 </div>
             )}
+
             {viewingHistoryTitle && (
                 <ConfirmModal
                     message={
@@ -1135,7 +973,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     showCancel={confirmModal.showCancel}
                 />
             )}
-        </div>
+        </div >
     );
 };
 

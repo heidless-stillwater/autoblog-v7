@@ -703,6 +703,11 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
 
     const guidelines = modelGuidelines || DEFAULT_NANOBANANA_GUIDELINES;
 
+    // Layout Configuration
+    const targetImageCount = settings.layoutNumImages || 3;
+    const includeHero = settings.layoutIncludeHero !== false; // Default true if undefined
+    const layoutInstructions = settings.layoutInstructions || '';
+
     // 1. Extract actual headers from content
     const headerRegex = /^(#{1,3})\s+(.+)$/gm;
     const headers: string[] = [];
@@ -711,27 +716,34 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
         headers.push(match[2].trim());
     }
 
-    const promptText = `Analyze the following blog post and create image generation prompts for the sections listed below.
+    const promptText = `Analyze the following blog post and create image generation prompts for the best sections to illustrate.
+    
+    CRITICAL CONSTRAINT: You must generate exactly ${targetImageCount} prompts in total. Choose the most visually impactful sections to illustrate, distributing them as instructed.
 
-    CRITICAL: You MUST use the EXACT section titles provided below. Do not modify, shorten, or paraphrase them.
+    CRITICAL: You MUST use the EXACT section titles provided below for the "sectionTitle" field. Do not modify, shorten, or paraphrase them.
 
     Available Sections (use these EXACT titles):
     ${headers.length > 0 ? headers.map((h, i) => `${i + 1}. "${h}"`).join('\n') : 'No headers found. Please identify logical sections.'}
 
     ${guidelines}
 
-    ${customInstructions ? `Additional User Instructions: ${customInstructions}` : ''}
+    ${layoutInstructions ? `Configuration & Placement Rules:\n${layoutInstructions}` : ''}
+    ${customInstructions ? `Additional Style/User Instructions:\n${customInstructions}` : ''}
 
     For each section, provide:
-    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly).
+    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly, or "Hero Image" if applicable).
     2. A highly detailed image generation prompt (approx 60-100 words).
     3. Rationale: Why this visual represents this specific section.
     
-    CRITICAL CONSTRAINT: One of these prompts MUST be the "Hero" prompt. 
+    ${includeHero ? `
+    CRITICAL CONSTRAINT: One of the ${targetImageCount} prompts MUST be the "Hero" prompt. 
     The "Hero" visual should NOT just be a literal scene from the text, but a 'gestalt' interpretation—a high-impact conceptual visual that captures the soul and central theme of the entire article. Mark this one as "isHero: true".
     **Hero Reasoning**: For the Hero image, you MUST provide a "heroReasoning" field in the JSON explaining the conceptual choices and how they represent the article's core theme.
     
     If the Hero image best fits the Article Title or Introduction (which might not be in the list above), you may use "Hero Image" or the Article Title as the "sectionTitle" for that specific prompt only.
+    ` : `
+    CRITICAL CONSTRAINT: Do NOT generate a "Hero" image. Do NOT set "isHero" to true for any prompt. Focus only on the body content sections.
+    `}
 
     Return ONLY a valid JSON object. No markdown formatting. No code comments (// or /*). No trailing commas.
 
@@ -755,7 +767,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
                 }],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 4096, // Increased to prevent JSON truncation
+                    maxOutputTokens: 4096,
                 }
             })
         });
@@ -775,7 +787,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
             contentStr = contentStr.substring(firstBrace, lastBrace + 1);
         } else {
-            // Fallback: try cleaning markdown if no clear JSON object found (unlikely but safe)
+            // Fallback: try cleaning markdown if no clear JSON object found
             if (contentStr.includes('```json')) {
                 contentStr = contentStr.split('```json')[1].split('```')[0].trim();
             } else if (contentStr.includes('```')) {
@@ -786,7 +798,8 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
         try {
             const parsed = JSON.parse(contentStr);
             const prompts = Array.isArray(parsed) ? parsed : (parsed.prompts || []);
-            return { prompts: prompts.slice(0, 8) };
+            // Enforce the count limit from settings
+            return { prompts: prompts.slice(0, targetImageCount) };
         } catch (parseError) {
             console.error('Failed to parse Gemini response as JSON. Raw text:', contentStr);
             console.error('Parse Error:', parseError);

@@ -114,6 +114,20 @@ const defaultSettings: Settings = {
     imageStylePresets: [],
     promptPresets: [],
     articleDefaultWordCount: 4000,
+    layoutPresets: [
+        {
+            id: 'preset-base-layout-0',
+            name: 'Base Layout 0',
+            imageCount: 3,
+            includeHero: true,
+            placementInstructions: '* If hero image is to be used then ONLY show Hero image in the Hero section of the Article above the Title. Do not display the Hero anywher else. Do not display the title or Hero within the Article.\n* I want the images to be spread as evenly across the article. If in doubt then bias the placement to the top half of the article',
+            createdAt: 0
+        }
+    ],
+    activeLayoutPresetId: 'preset-base-layout-0',
+    layoutNumImages: 3,
+    layoutIncludeHero: true,
+    layoutInstructions: '* If hero image is to be used then ONLY show Hero image in the Hero section of the Article above the Title. Do not display the Hero anywher else. Do not display the title or Hero within the Article.\n* I want the images to be spread as evenly across the article. If in doubt then bias the placement to the top half of the article',
 };
 
 export const useStore = create<AppState>()((set, get) => ({
