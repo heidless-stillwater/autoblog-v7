@@ -5,7 +5,7 @@ import {
     Trash2, ChevronDown, CheckCircle
 } from 'lucide-react';
 import StyleOptionsSelector from './StyleOptionsSelector';
-import type { StyleOptions, ArticleLayoutPreset } from '../types';
+import type { StyleOptions, ArticleLayoutPreset, LayoutConfig } from '../types';
 import clsx from 'clsx'; // Assuming clsx is available since it was used in ImagePromptManager
 
 interface PromptConfigModalProps {
@@ -20,6 +20,12 @@ interface PromptConfigModalProps {
     onModelGuidelinesUpdate: (val: string) => void;
     currentPromptPresetId: string | null;
     onPromptPresetChange: (id: string | null) => void;
+
+    // Layout Props
+    layoutConfig: LayoutConfig;
+    onLayoutConfigUpdate: (config: LayoutConfig) => void;
+    activeLayoutPresetId: string | null;
+    onLayoutPresetChange: (id: string | null) => void;
 }
 
 const PromptConfigModal = ({
@@ -32,7 +38,11 @@ const PromptConfigModal = ({
     modelGuidelines,
     onModelGuidelinesUpdate,
     currentPromptPresetId,
-    onPromptPresetChange
+    onPromptPresetChange,
+    layoutConfig,
+    onLayoutConfigUpdate,
+    activeLayoutPresetId,
+    onLayoutPresetChange
 }: PromptConfigModalProps) => {
     const { settings, updateSettings } = useStore();
     const [activeTab, setActiveTab] = useState<'style' | 'layout'>('style');
@@ -57,27 +67,19 @@ const PromptConfigModal = ({
 
     // --- LAYOUT LOGIC ---
     const allLayoutPresets = settings.layoutPresets || [];
-    const activeLayoutPreset = allLayoutPresets.find(p => p.id === settings.activeLayoutPresetId);
+    const activeLayoutPreset = allLayoutPresets.find(p => p.id === activeLayoutPresetId);
 
     // Detect if current settings match the active preset (clean vs dirty/custom)
     const isLayoutDirty = activeLayoutPreset
         ? (
-            activeLayoutPreset.imageCount !== settings.layoutNumImages ||
-            activeLayoutPreset.includeHero !== settings.layoutIncludeHero ||
-            activeLayoutPreset.placementInstructions !== settings.layoutInstructions
+            activeLayoutPreset.imageCount !== layoutConfig.imageCount ||
+            activeLayoutPreset.includeHero !== layoutConfig.includeHero ||
+            activeLayoutPreset.placementInstructions !== layoutConfig.instructions
         )
         : true; // If no active preset, it's effectively "Custom"
 
-    const handleApplyLayoutPreset = async (presetId: string) => {
-        const preset = allLayoutPresets.find(p => p.id === presetId);
-        if (preset) {
-            await updateSettings({
-                activeLayoutPresetId: presetId,
-                layoutNumImages: preset.imageCount,
-                layoutIncludeHero: preset.includeHero,
-                layoutInstructions: preset.placementInstructions
-            });
-        }
+    const handleApplyLayoutPreset = (presetId: string) => {
+        onLayoutPresetChange(presetId);
     };
 
     const handleSaveLayoutPreset = async () => {
@@ -85,29 +87,29 @@ const PromptConfigModal = ({
         const newPreset: ArticleLayoutPreset = {
             id: crypto.randomUUID(),
             name: layoutPresetName.trim(),
-            imageCount: settings.layoutNumImages || 3,
-            includeHero: settings.layoutIncludeHero ?? true,
-            placementInstructions: settings.layoutInstructions || '',
+            imageCount: layoutConfig.imageCount,
+            includeHero: layoutConfig.includeHero,
+            placementInstructions: layoutConfig.instructions,
             createdAt: Date.now()
         };
         const updatedPresets = [...allLayoutPresets, newPreset];
         await updateSettings({
-            layoutPresets: updatedPresets,
-            activeLayoutPresetId: newPreset.id
+            layoutPresets: updatedPresets
         });
+        onLayoutPresetChange(newPreset.id); // Notify parent to switch to this preset
         setLayoutPresetName('');
     };
 
     const handleUpdateActiveLayoutPreset = async () => {
-        if (!settings.activeLayoutPresetId) return;
+        if (!activeLayoutPresetId) return;
 
         const updatedPresets = allLayoutPresets.map(p => {
-            if (p.id === settings.activeLayoutPresetId) {
+            if (p.id === activeLayoutPresetId) {
                 return {
                     ...p,
-                    imageCount: settings.layoutNumImages || 3,
-                    includeHero: settings.layoutIncludeHero ?? true,
-                    placementInstructions: settings.layoutInstructions || ''
+                    imageCount: layoutConfig.imageCount,
+                    includeHero: layoutConfig.includeHero,
+                    placementInstructions: layoutConfig.instructions
                 };
             }
             return p;
@@ -119,11 +121,12 @@ const PromptConfigModal = ({
     const handleDeleteLayoutPreset = async (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
         const updatedPresets = allLayoutPresets.filter(p => p.id !== id);
-        // If we deleted the active one, switch to Custom (null)
-        const newActiveId = settings.activeLayoutPresetId === id ? null : settings.activeLayoutPresetId;
+        // If we deleted the active one, notify parent to switch to null (Custom)
+        if (activeLayoutPresetId === id) {
+            onLayoutPresetChange(null);
+        }
         await updateSettings({
-            layoutPresets: updatedPresets,
-            activeLayoutPresetId: newActiveId
+            layoutPresets: updatedPresets
         });
     };
 
@@ -286,7 +289,7 @@ const PromptConfigModal = ({
                                 <div className="flex gap-2">
                                     <div className="relative flex-1 group">
                                         <select
-                                            value={settings.activeLayoutPresetId || ''}
+                                            value={activeLayoutPresetId || ''}
                                             onChange={(e) => handleApplyLayoutPreset(e.target.value)}
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-emerald-500/50 outline-none appearance-none"
                                         >
@@ -294,15 +297,15 @@ const PromptConfigModal = ({
                                             {allLayoutPresets.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}
-                                            {!settings.activeLayoutPresetId && <option value="custom">Custom Configuration</option>}
+                                            <option value="custom">Custom Configuration</option>
                                         </select>
                                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
                                     </div>
 
                                     {/* Delete Button for Non-Standard/Default presets */}
-                                    {settings.activeLayoutPresetId && settings.activeLayoutPresetId !== 'preset-base-layout-0' && (
+                                    {activeLayoutPresetId && activeLayoutPresetId !== 'preset-base-layout-0' && (
                                         <button
-                                            onClick={() => handleDeleteLayoutPreset(settings.activeLayoutPresetId!)}
+                                            onClick={() => handleDeleteLayoutPreset(activeLayoutPresetId!)}
                                             className="p-2 text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-700 rounded-lg transition-colors"
                                             title="Delete Preset"
                                         >
@@ -315,7 +318,7 @@ const PromptConfigModal = ({
                                 {isLayoutDirty && (
                                     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 pt-3 border-t border-slate-800/50">
                                         {/* Update Existing Button */}
-                                        {settings.activeLayoutPresetId && (
+                                        {activeLayoutPresetId && (
                                             <button
                                                 onClick={handleUpdateActiveLayoutPreset}
                                                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 border border-slate-700"
@@ -358,10 +361,10 @@ const PromptConfigModal = ({
                                             type="number"
                                             min="1"
                                             max="20"
-                                            value={settings.layoutNumImages || 3}
-                                            onChange={(e) => updateSettings({
-                                                layoutNumImages: parseInt(e.target.value) || 1,
-                                                activeLayoutPresetId: null // Mark as custom
+                                            value={layoutConfig.imageCount}
+                                            onChange={(e) => onLayoutConfigUpdate({
+                                                ...layoutConfig,
+                                                imageCount: parseInt(e.target.value) || 1
                                             })}
                                             className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:ring-1 focus:ring-indigo-500/50 outline-none"
                                         />
@@ -371,16 +374,16 @@ const PromptConfigModal = ({
                                             <div
                                                 className={clsx(
                                                     "w-5 h-5 rounded border flex items-center justify-center transition-colors",
-                                                    settings.layoutIncludeHero
+                                                    layoutConfig.includeHero
                                                         ? "bg-indigo-600 border-indigo-600 text-white"
                                                         : "border-slate-600 bg-slate-900 group-hover:border-slate-500"
                                                 )}
-                                                onClick={() => updateSettings({
-                                                    layoutIncludeHero: !settings.layoutIncludeHero,
-                                                    activeLayoutPresetId: null
+                                                onClick={() => onLayoutConfigUpdate({
+                                                    ...layoutConfig,
+                                                    includeHero: !layoutConfig.includeHero
                                                 })}
                                             >
-                                                {settings.layoutIncludeHero && <CheckCircle size={14} />}
+                                                {layoutConfig.includeHero && <CheckCircle size={14} />}
                                             </div>
                                             <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Generate Hero Image?</span>
                                         </label>
@@ -392,10 +395,10 @@ const PromptConfigModal = ({
                                         Image Placement Instructions
                                     </label>
                                     <textarea
-                                        value={settings.layoutInstructions || ''}
-                                        onChange={(e) => updateSettings({
-                                            layoutInstructions: e.target.value,
-                                            activeLayoutPresetId: null
+                                        value={layoutConfig.instructions}
+                                        onChange={(e) => onLayoutConfigUpdate({
+                                            ...layoutConfig,
+                                            instructions: e.target.value
                                         })}
                                         className="w-full h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-300 placeholder-slate-600 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none font-mono leading-relaxed"
                                     />

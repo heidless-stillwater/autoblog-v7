@@ -46,7 +46,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         deleteImagePrompt,
         loadImagePrompts,
         settings,
-
         addMedia,
         articles,
         updateArticle
@@ -78,6 +77,15 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [showConfig, setShowConfig] = useState(false);
 
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>('preset-standard-vintage');
+
+    // Layout Config State (Per-Article)
+    const [layoutConfig, setLayoutConfig] = useState({
+        imageCount: settings.layoutNumImages || 3,
+        includeHero: settings.layoutIncludeHero ?? true,
+        instructions: settings.layoutInstructions || ''
+    });
+    const [activeLayoutPresetId, setActiveLayoutPresetId] = useState<string | null>(settings.activeLayoutPresetId || 'preset-base-layout-0');
+
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
         onConfirm: () => void;
@@ -210,12 +218,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         performGenerate();
     };
 
-
-
-
-
-
-
     const handleApplyPreset = (id: string | null) => {
         if (!id) {
             setSelectedPresetId(null);
@@ -235,6 +237,21 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         }
     };
 
+    const handleLayoutPresetChange = (id: string | null) => {
+        if (!id) {
+            setActiveLayoutPresetId(null);
+            return;
+        }
+        const preset = (settings.layoutPresets || []).find(p => p.id === id);
+        if (preset) {
+            setLayoutConfig({
+                imageCount: preset.imageCount,
+                includeHero: preset.includeHero,
+                instructions: preset.placementInstructions
+            });
+            setActiveLayoutPresetId(id);
+        }
+    };
 
 
     const performGenerate = async () => {
@@ -249,7 +266,15 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 ...(customInstructions ? [customInstructions] : [])
             ].join(', ');
 
-            const { prompts: aiPrompts, error: aiError } = await generateImagePrompts(content, settings, combinedInstructions, modelGuidelines);
+            // Inject local layout configuration
+            const syntheticSettings = {
+                ...settings,
+                layoutNumImages: layoutConfig.imageCount,
+                layoutIncludeHero: layoutConfig.includeHero,
+                layoutInstructions: layoutConfig.instructions
+            };
+
+            const { prompts: aiPrompts, error: aiError } = await generateImagePrompts(content, syntheticSettings, combinedInstructions, modelGuidelines);
             if (aiError) {
                 setError(aiError);
             } else {
@@ -264,7 +289,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     const draft = sortedPrompts[i];
 
                     // Find existing prompt for this section to handle versioning
-                    const existing = filteredPrompts.find(p => p.sectionTitle === draft.sectionTitle);
+                    const existing = allPrompts.find(p => p.sectionTitle === draft.sectionTitle);
                     const newVersion = (existing?.version || 1) + 1;
                     const previousId = existing?.id;
 
@@ -275,7 +300,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         prompt: draft.prompt || '',
                         isHero: !!draft.isHero,
                         heroReasoning: draft.heroReasoning || '',
-                        presetId: selectedPresetId || '',
+                        presetId: selectedPresetId || undefined,
                         version: existing ? newVersion : 1,
                         previousVersionId: previousId || '',
                         createdAt: Date.now() + i,
@@ -679,6 +704,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             onModelGuidelinesUpdate={setModelGuidelines}
                             currentPromptPresetId={selectedPresetId}
                             onPromptPresetChange={handleApplyPreset}
+                            layoutConfig={layoutConfig}
+                            onLayoutConfigUpdate={setLayoutConfig}
+                            activeLayoutPresetId={activeLayoutPresetId}
+                            onLayoutPresetChange={handleLayoutPresetChange}
                         />
                     )}
 

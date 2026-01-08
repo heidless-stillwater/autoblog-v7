@@ -82,6 +82,12 @@ export interface ArticleLayoutPreset {
     createdAt: number;
 }
 
+export interface LayoutConfig {
+    imageCount: number;
+    includeHero: boolean;
+    instructions: string;
+}
+
 export type ToolCategory = 'debater' | 'muse' | 'analyst';
 export type ResearchTool =
     | 'perplexity' | 'brave-goggles' | 'claude-4-5'
