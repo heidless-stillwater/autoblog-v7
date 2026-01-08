@@ -656,6 +656,25 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                         <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
                         {article.heroImage ? 'Change Hero' : 'Set Hero from Content'}
                     </button>
+                    {article.heroImage && (
+                        <button
+                            onClick={() => {
+                                setConfirmModal({
+                                    message: 'Remove the hero image?',
+                                    onConfirm: async () => {
+                                        await updateArticle(article.id, { heroImage: '' });
+                                        setConfirmModal(null);
+                                    },
+                                    confirmText: 'Remove',
+                                    cancelText: 'Cancel'
+                                });
+                            }}
+                            className="ml-2 bg-red-500/80 hover:bg-red-600 px-2 py-1.5 rounded-lg text-white backdrop-blur shadow-lg transition-colors border border-red-500/50"
+                            title="Remove Hero Image"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                    )}
                 </div>
             </div>
 
