@@ -498,6 +498,11 @@ export const rewriteToStyle = async (content: string, settings: Settings, custom
     Writing & Formatting Rules:
     ${ARTICLE_GUIDELINES}
     
+    Target Word Count:
+    - Aim for approximately ${settings.articleDefaultWordCount || 3000} words in the rewritten version
+    - Maintain the depth and completeness of the original content
+    - Do not truncate or significantly shorten the article
+    
     original Content:
     ${content}
     
@@ -506,6 +511,7 @@ export const rewriteToStyle = async (content: string, settings: Settings, custom
     - RESTRUCTURE the content to match the "Writing Guidelines" above (add H3s, lists, emojis if missing).
     - Ensure all Output Rules are met (valid Markdown, no intro/outro).
     - **CRITICAL**: Do NOT remove Markdown headers (#, ##, etc.). ENHANCE them.
+    - **CRITICAL**: Maintain approximately ${settings.articleDefaultWordCount || 3000} words.
     `;
 
     try {
@@ -527,7 +533,7 @@ export const rewriteToStyle = async (content: string, settings: Settings, custom
                         content: prompt
                     }
                 ],
-                max_tokens: 4096,
+                max_tokens: 6000,
             })
         });
 
@@ -603,8 +609,8 @@ export const optimizeForSEO = async (content: string, keywords: string, style: s
         return { content: '', error: 'Perplexity API Key is missing. Please add it in Settings.' };
     }
 
-    // Safety Check: Very long articles (approx > 10,000 chars) might hit output limits
-    if (content.length > 15000) {
+    // Safety Check: Very long articles (approx > 15,000 chars) might hit output limits
+    if (content.length > 20000) {
         console.warn("Large content detected. SEO optimization might be truncated due to AI token limits.");
     }
 
@@ -628,6 +634,7 @@ Return only the improved version of the text.
 
 Target Writing Style: ${style}
 Target SEO Keywords: ${keywords}
+Target Word Count: Maintain approximately ${settings.articleDefaultWordCount || 3000} words
 
 Original Content:
 ${content}
@@ -652,7 +659,7 @@ ${content}
                         content: prompt
                     }
                 ],
-                max_tokens: 4096,
+                max_tokens: 6000,
             })
         });
 
