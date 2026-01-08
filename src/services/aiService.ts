@@ -224,7 +224,8 @@ export const generateWithResearch = async (
     topic: string,
     settings: Settings,
     cachedResearch?: { prompt: string; response: string },
-    tool: ResearchTool = 'perplexity'
+    tool: ResearchTool = 'perplexity',
+    layoutInstructions?: string
 ): Promise<ResearchResponse> => {
     // If it's a tool we don't handle yet, revert to perplexity or show error
     // For now, only Perplexity is fully implemented.
@@ -378,6 +379,10 @@ export const generateWithResearch = async (
     - Use the provided "Research Data" above to write the article about: "${topic}".
     - Tailor the content to the **knowledge level, interests, and needs of the target audience**.
     - Ensure the article is **a minimum of ${settings.articleDefaultWordCount || 2000} words** to provide depth and SEO value.
+
+    Layout & Structure Constraints:
+    ${layoutInstructions ? `CRITICAL: You MUST strictly adhere to these specific layout instructions:
+    ${layoutInstructions}` : 'Follow standard blog structure.'}
 
     Writing Guidelines & Output Rules:
     ${ARTICLE_GUIDELINES}

@@ -65,6 +65,12 @@ export interface Settings {
     promptPresets?: PromptPreset[];
     articleDefaultWordCount?: number;
 
+    // Article Style Configuration
+    activePromptPresetId?: string | null;
+    defaultStyleOptions?: StyleOptions;
+    defaultCustomInstructions?: string;
+    defaultModelGuidelines?: string;
+
     // Article Layout Configuration
     layoutPresets?: ArticleLayoutPreset[];
     activeLayoutPresetId?: string | null;

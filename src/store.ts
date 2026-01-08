@@ -114,6 +114,15 @@ const defaultSettings: Settings = {
     imageStylePresets: [],
     promptPresets: [],
     articleDefaultWordCount: 4000,
+    activePromptPresetId: 'preset-standard-vintage',
+    defaultStyleOptions: {
+        composition: 'centered medium shot',
+        medium: 'vintage film photography with grain',
+        lighting: 'warm golden hour glow',
+        mood: 'nostalgic and peaceful'
+    },
+    defaultCustomInstructions: 'Maintain a warm, nostalgic feel with authentic film grain and slightly faded colors.',
+    defaultModelGuidelines: 'Always prioritize high-quality compositions that tell a story. Avoid overly digital or artificial looks.',
     layoutPresets: [
         {
             id: 'preset-base-layout-0',

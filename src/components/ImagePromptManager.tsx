@@ -74,17 +74,19 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [editTitle, setEditTitle] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
     const [editIsHero, setEditIsHero] = useState(false);
-    const [customInstructions, setCustomInstructions] = useState('');
-    const [modelGuidelines, setModelGuidelines] = useState(DEFAULT_NANOBANANA_GUIDELINES);
-    const [styleOptions, setStyleOptions] = useState<StyleOptions>({
-        composition: '',
-        medium: '',
-        lighting: '',
-        mood: ''
-    });
+    const [styleOptions, setStyleOptions] = useState<StyleOptions>(
+        settings.defaultStyleOptions || {
+            composition: '',
+            medium: '',
+            lighting: '',
+            mood: ''
+        }
+    );
+    const [customInstructions, setCustomInstructions] = useState(settings.defaultCustomInstructions || '');
+    const [modelGuidelines, setModelGuidelines] = useState(settings.defaultModelGuidelines || DEFAULT_NANOBANANA_GUIDELINES);
     const [showConfig, setShowConfig] = useState(false);
 
-    const [selectedPresetId, setSelectedPresetId] = useState<string | null>('preset-standard-vintage');
+    const [selectedPresetId, setSelectedPresetId] = useState<string | null>(settings.activePromptPresetId || 'preset-standard-vintage');
 
     const currentArticle = articles.find(a => a.id === articleId);
 

@@ -224,7 +224,13 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 response: research.response
             } : undefined;
 
-            const result = await generateWithResearch(article.topic, settings, cachedResearch);
+            const result = await generateWithResearch(
+                article.topic,
+                settings,
+                cachedResearch,
+                'perplexity',
+                article.layoutConfig?.instructions
+            );
 
             if (result.error) {
                 setConfirmModal({
@@ -571,9 +577,10 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         setScheduleDate(format(future, "yyyy-MM-dd'T'HH:mm"));
     };
 
+    const shouldHideHeader = article.layoutConfig?.instructions?.toLowerCase().includes('do not display the article header');
+
     return (
         <div className="max-w-6xl mx-auto space-y-6 pb-20">
-            {/* ... (Header code remains unchanged, but we are inside the component return) ... */}
             {/* Header */}
             <div className="flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur z-40 py-4 -mx-4 px-4 border-b border-slate-800/50">
                 <div className="flex items-center gap-4">
@@ -583,12 +590,14 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                     >
                         <ArrowLeft size={20} />
                     </button>
-                    <div>
-                        <h1 className="text-xl font-bold text-white">{article.topic}</h1>
-                        <p className="text-sm text-slate-400">
-                            {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
-                        </p>
-                    </div>
+                    {!shouldHideHeader && (
+                        <div>
+                            <h1 className="text-xl font-bold text-white">{article.topic}</h1>
+                            <p className="text-sm text-slate-400">
+                                {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">

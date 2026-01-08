@@ -73,6 +73,8 @@ const FrontendArticleView = () => {
         content = post.content;
     }
 
+    const shouldHideHeader = isArticle(post) && post.layoutConfig?.instructions?.toLowerCase().includes('do not display the article header');
+
     return (
         <article className="max-w-4xl mx-auto">
             {/* Nav */}
@@ -84,45 +86,49 @@ const FrontendArticleView = () => {
             </div>
 
             {/* Header */}
-            <header className="mb-12 text-center">
-                {image && (
-                    <div className="rounded-2xl overflow-hidden aspect-video mb-8 border border-white/5 shadow-2xl">
-                        <img
-                            src={image}
-                            alt={title}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                )}
-
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
-                    {title}
-                </h1>
-
-                <div className="flex items-center justify-center gap-6 text-slate-400">
-                    <span className="flex items-center gap-2">
-                        <Clock size={18} />
-                        {format(date, 'MMMM d, yyyy')}
-                    </span>
-
-                    <div className="w-px h-4 bg-slate-700"></div>
-
-                    <button className="flex items-center gap-2 hover:text-white transition-colors">
-                        <Share2 size={18} />
-                        Share
-                    </button>
-
-                    {user && id && (
-                        <button
-                            onClick={() => toggleFavorite(id)}
-                            className={`flex items-center gap-2 transition-colors ${isFavorited ? 'text-red-500' : 'hover:text-white'}`}
-                        >
-                            <Heart size={18} fill={isFavorited ? "currentColor" : "none"} />
-                            Favorite
-                        </button>
+            {!shouldHideHeader && (
+                <header className="mb-12 text-center">
+                    {image && (
+                        <div className="rounded-2xl overflow-hidden aspect-video mb-8 border border-white/5 shadow-2xl">
+                            <img
+                                src={image}
+                                alt={title}
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
                     )}
-                </div>
-            </header>
+
+                    <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
+                        {title}
+                    </h1>
+
+                    <div className="flex items-center justify-center gap-6 text-slate-400">
+                        <span className="flex items-center gap-2">
+                            <Clock size={18} />
+                            {format(date, 'MMMM d, yyyy')}
+                        </span>
+
+                        <div className="w-px h-4 bg-slate-700"></div>
+
+                        <button className="flex items-center gap-2 hover:text-white transition-colors">
+                            <Share2 size={18} />
+                            Share
+                        </button>
+
+                        {user && id && (
+                            <button
+                                onClick={() => toggleFavorite(id)}
+                                className={`flex items-center gap-2 transition-colors ${isFavorited ? 'text-red-500' : 'hover:text-white'}`}
+                            >
+                                <div className="relative">
+                                    <Heart size={18} fill={isFavorited ? "currentColor" : "none"} />
+                                </div>
+                                Favorite
+                            </button>
+                        )}
+                    </div>
+                </header>
+            )}
 
             {/* Content */}
             <div className="prose prose-invert prose-lg max-w-none">

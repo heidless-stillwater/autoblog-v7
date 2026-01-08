@@ -159,6 +159,31 @@ const PromptConfigModal = ({
         setStylePresetName('');
     };
 
+    const handleSetStyleGlobalDefault = async () => {
+        if (!currentPromptPresetId) return;
+
+        let selectedPreset;
+        // Check standard presets first
+        selectedPreset = STANDARD_STYLE_PRESETS.find(p => p.id === currentPromptPresetId);
+
+        // If not found, check custom presets
+        if (!selectedPreset) {
+            selectedPreset = (settings.promptPresets || []).find(p => p.id === currentPromptPresetId);
+        }
+
+        // We need the full prompt preset object, including styleOptions etc.
+        // For standard presets, we might need a mapping since they aren't full PromptPreset objects in this component's local array.
+        // Looking at ImagePromptManager, it handles standard presets similarly.
+
+        // Actually, let's just use the current values since they are already applied to the modal's state
+        await updateSettings({
+            activePromptPresetId: currentPromptPresetId,
+            defaultStyleOptions: styleOptions,
+            defaultCustomInstructions: customInstructions,
+            defaultModelGuidelines: modelGuidelines
+        });
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -250,6 +275,25 @@ const PromptConfigModal = ({
                                         </optgroup>
                                     )}
                                 </select>
+
+                                {/* Global Default Actions */}
+                                <div className="flex justify-end gap-2">
+                                    {currentPromptPresetId && currentPromptPresetId !== settings.activePromptPresetId && (
+                                        <button
+                                            onClick={handleSetStyleGlobalDefault}
+                                            className="text-[10px] font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors group"
+                                        >
+                                            <Star size={10} className="group-hover:text-yellow-400 transition-colors" />
+                                            Set as Global Default
+                                        </button>
+                                    )}
+                                    {currentPromptPresetId === settings.activePromptPresetId && (
+                                        <span className="text-[10px] font-bold text-yellow-500/80 flex items-center gap-1.5 cursor-default">
+                                            <Star size={10} fill="currentColor" />
+                                            Active Global Default
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-4">
