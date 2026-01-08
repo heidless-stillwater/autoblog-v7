@@ -225,7 +225,8 @@ export const generateWithResearch = async (
     settings: Settings,
     cachedResearch?: { prompt: string; response: string },
     tool: ResearchTool = 'perplexity',
-    layoutInstructions?: string
+    layoutInstructions?: string,
+    onProgress?: (step: 'research' | 'writing' | 'cleaning') => void
 ): Promise<ResearchResponse> => {
     // If it's a tool we don't handle yet, revert to perplexity or show error
     // For now, only Perplexity is fully implemented.
@@ -258,6 +259,7 @@ export const generateWithResearch = async (
             researchPrompt = cachedResearch.prompt;
             researchResponse = cachedResearch.response;
         } else {
+            onProgress?.('research');
             // Generate new research
             researchPrompt = `Conduct comprehensive research on the topic: "${topic}". Gather recent insights, statistics, examples, case studies, and expert opinions. Focus on factual, up-to-date information that would be valuable for a blog article.`;
 
@@ -388,6 +390,7 @@ export const generateWithResearch = async (
     ${ARTICLE_GUIDELINES}
     `;
 
+        onProgress?.('writing');
         const articleResult = await fetch(`${PERPLEXITY_API_URL}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -417,6 +420,7 @@ ${BLOG_STYLE_GUIDE}`
         }
 
         const articleData = await articleResult.json();
+        onProgress?.('cleaning');
         return {
             content: cleanMarkdown(articleData.choices[0].message.content),
             researchPrompt,

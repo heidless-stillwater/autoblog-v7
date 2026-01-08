@@ -58,6 +58,10 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     const [showResearchSelector, setShowResearchSelector] = useState(false);
     const [showMediaSelector, setShowMediaSelector] = useState(false);
     const [existingResearch, setExistingResearch] = useState<PerplexityPrompt[]>([]);
+    const [regenerationProgress, setRegenerationProgress] = useState<{
+        percent: number;
+        message: string;
+    } | null>(null);
     const [scheduleDate, setScheduleDate] = useState(
         article.scheduleDate ? new Date(article.scheduleDate).toISOString().slice(0, 16) : ''
     );
@@ -218,6 +222,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
     const performRegenerate = async (research: PerplexityPrompt | null) => {
         setIsRegenerating(true);
+        setRegenerationProgress({ percent: 0, message: 'Preparing research context...' });
         try {
             const cachedResearch = research ? {
                 prompt: research.prompt,
@@ -229,10 +234,20 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 settings,
                 cachedResearch,
                 'perplexity',
-                article.layoutConfig?.instructions
+                article.layoutConfig?.instructions,
+                (step) => {
+                    if (step === 'research') {
+                        setRegenerationProgress({ percent: 10, message: 'Researching topic details...' });
+                    } else if (step === 'writing') {
+                        setRegenerationProgress({ percent: 40, message: 'Writing high-quality article content...' });
+                    } else if (step === 'cleaning') {
+                        setRegenerationProgress({ percent: 90, message: 'Finalizing formatting...' });
+                    }
+                }
             );
 
             if (result.error) {
+                setRegenerationProgress(null);
                 setConfirmModal({
                     message: `Error: ${result.error}`,
                     onConfirm: () => setConfirmModal(null),
@@ -266,6 +281,10 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
                 await addArticleVersion(article.id, newVersion);
                 setCurrentVersionId(newVersionId);
+
+                setRegenerationProgress({ percent: 100, message: 'Article ready!' });
+                setTimeout(() => setRegenerationProgress(null), 1500);
+
                 setConfirmModal({
                     message: 'New version generated successfully!',
                     onConfirm: () => setConfirmModal(null),
@@ -273,6 +292,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 });
             }
         } catch (error) {
+            setRegenerationProgress(null);
             setConfirmModal({
                 message: 'Failed to generate new version. Please try again.',
                 onConfirm: () => setConfirmModal(null),
@@ -581,6 +601,26 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
 
     return (
         <div className="max-w-6xl mx-auto space-y-6 pb-20">
+            {/* Regeneration Progress */}
+            {regenerationProgress && (
+                <div className="fixed top-24 left-1/2 -translate-x-1/2 w-full max-w-lg z-50 px-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-slate-900/90 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-4 shadow-2xl shadow-indigo-500/10">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-medium text-indigo-400 flex items-center gap-2">
+                                <Sparkles size={16} className="animate-pulse" />
+                                {regenerationProgress.message}
+                            </span>
+                            <span className="text-xs font-mono text-slate-500">{Math.round(regenerationProgress.percent)}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-500 ease-out"
+                                style={{ width: `${regenerationProgress.percent}%` }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Header */}
             <div className="flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur z-40 py-4 -mx-4 px-4 border-b border-slate-800/50">
                 <div className="flex items-center gap-4">
