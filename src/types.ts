@@ -141,6 +141,7 @@ export interface ImagePrompt {
     topic: string; // Added to identify by topic in question
     sectionTitle: string;
     prompt: string;
+    rationale?: string;
     createdAt: number;
     updatedAt: number;
     isPromptInserted?: boolean;

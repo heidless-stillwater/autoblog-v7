@@ -65,8 +65,10 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     // Form states
     const [newTitle, setNewTitle] = useState('');
     const [newPrompt, setNewPrompt] = useState('');
+    const [newIsHero, setNewIsHero] = useState(false);
     const [editTitle, setEditTitle] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
+    const [editIsHero, setEditIsHero] = useState(false);
     const [customInstructions, setCustomInstructions] = useState('');
     const [modelGuidelines, setModelGuidelines] = useState(DEFAULT_NANOBANANA_GUIDELINES);
     const [styleOptions, setStyleOptions] = useState<StyleOptions>({
@@ -82,6 +84,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const currentArticle = articles.find(a => a.id === articleId);
 
     // Layout Config State (Per-Article)
+    // We initialize from article IF it exists, otherwise we fallback to global settings.
     const [layoutConfig, setLayoutConfig] = useState({
         imageCount: (currentArticle?.layoutConfig?.imageCount ?? settings.layoutNumImages) || 3,
         includeHero: (currentArticle?.layoutConfig?.includeHero ?? settings.layoutIncludeHero) ?? true,
@@ -90,6 +93,18 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [activeLayoutPresetId, setActiveLayoutPresetId] = useState<string | null>(
         (currentArticle?.activeLayoutPresetId ?? settings.activeLayoutPresetId) || 'preset-base-layout-0'
     );
+
+    // Sync with global settings if this article hasn't been customized yet
+    useEffect(() => {
+        if (!currentArticle?.layoutConfig && !currentArticle?.activeLayoutPresetId) {
+            setLayoutConfig({
+                imageCount: settings.layoutNumImages || 3,
+                includeHero: settings.layoutIncludeHero ?? true,
+                instructions: settings.layoutInstructions || ''
+            });
+            setActiveLayoutPresetId(settings.activeLayoutPresetId || 'preset-base-layout-0');
+        }
+    }, [settings, currentArticle]);
 
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
@@ -100,13 +115,14 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         showCancel?: boolean;
     } | null>(null);
 
-    // Persist layout changes to article
+    // Persist layout changes to article ONLY IF they differ from what's currently saved
     useEffect(() => {
         if (currentArticle) {
             const hasChanged =
                 currentArticle.activeLayoutPresetId !== activeLayoutPresetId ||
                 JSON.stringify(currentArticle.layoutConfig) !== JSON.stringify(layoutConfig);
 
+            // Only update if there's a real difference
             if (hasChanged) {
                 updateArticle(articleId, {
                     layoutConfig,
@@ -287,6 +303,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             ].join(', ');
 
             // Inject local layout configuration
+            console.log('[ImagePromptManager] Generating with layout instructions:', layoutConfig.instructions);
             const syntheticSettings = {
                 ...settings,
                 layoutNumImages: layoutConfig.imageCount,
@@ -298,15 +315,16 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             if (aiError) {
                 setError(aiError);
             } else {
-                // Sort prompts to ensure hero prompt appears first
-                const sortedPrompts = [...aiPrompts].sort((a, b) => {
+                aiPrompts.sort((a, b) => {
                     if (a.isHero && !b.isHero) return -1;
                     if (!a.isHero && b.isHero) return 1;
                     return 0;
                 });
 
-                for (let i = 0; i < sortedPrompts.length; i++) {
-                    const draft = sortedPrompts[i];
+                console.table(aiPrompts.map(p => ({ title: p.sectionTitle, isHero: p.isHero, rationale: p.rationale?.substring(0, 30) + '...' })));
+
+                for (let i = 0; i < aiPrompts.length; i++) {
+                    const draft = aiPrompts[i];
 
                     // Find existing prompt for this section to handle versioning
                     const existing = allPrompts.find(p => p.sectionTitle === draft.sectionTitle);
@@ -318,6 +336,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         topic,
                         sectionTitle: draft.sectionTitle || 'Untitled Section',
                         prompt: draft.prompt || '',
+                        rationale: draft.rationale || '',
                         isHero: !!draft.isHero,
                         heroReasoning: draft.heroReasoning || '',
                         presetId: selectedPresetId || undefined,
@@ -350,11 +369,16 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 topic,
                 sectionTitle: newTitle,
                 prompt: newPrompt,
+                rationale: 'Manually added prompt',
+                isHero: newIsHero || newTitle.toLowerCase().includes('hero'), // Auto-detect or manual
+                isPromptInserted: false,
+                isImageInserted: false,
                 createdAt: Date.now(),
                 updatedAt: Date.now()
             });
             setNewTitle('');
             setNewPrompt('');
+            setNewIsHero(false);
             setIsAdding(false);
         } catch (err) {
             setError('Failed to add prompt.');
@@ -365,15 +389,21 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         setEditingId(prompt.id);
         setEditTitle(prompt.sectionTitle);
         setEditPrompt(prompt.prompt);
+        setEditIsHero(!!prompt.isHero);
     };
 
     const handleSaveEdit = async (id: string) => {
+        if (!editTitle || !editPrompt) return;
         try {
             await updateImagePrompt(id, {
                 sectionTitle: editTitle,
-                prompt: editPrompt
+                prompt: editPrompt,
+                isHero: editIsHero
             });
             setEditingId(null);
+            setEditTitle('');
+            setEditPrompt('');
+            setEditIsHero(false);
         } catch (err) {
             setError('Failed to update prompt.');
         }
@@ -511,6 +541,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     };
 
     const generateAndInsertImage = async (prompt: ImagePrompt, baseContent: string, shouldSetHero: boolean = true): Promise<string | null> => {
+        console.log(`🚀 [generateAndInsertImage] Processing: "${prompt.sectionTitle}" (isHero: ${prompt.isHero})`);
         setProcessingIds(prev => new Set(prev).add(prompt.id));
         setError(null);
         try {
@@ -561,11 +592,13 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
                 // If it IS a hero image, we generally do NOT want it in the body content 
                 // because it's already displayed as the article banner.
-                // We mark it as inserted so it doesn't look pending.
                 if (isHeroImage) {
+                    console.log(`✨ [generateAndInsertImage] Skipping body insertion for Hero image: "${prompt.sectionTitle}"`);
                     await updateImagePrompt(prompt.id, { isImageInserted: true });
                     return baseContent; // Return unchanged content
                 }
+
+                console.log(`📝 [generateAndInsertImage] Inserting into body: "${prompt.sectionTitle}"`);
                 const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
                 let newContent = baseContent;
@@ -760,16 +793,23 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     onClick={async () => {
                                         setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
+                                        // Mark all as inserted at once if we are doing bulk
                                         let currentContent = content;
 
-                                        // Check hero status once before loop
-                                        const article = articles.find(a => a.id === articleId);
-                                        const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+                                        // We reverse the list for the insertion loop so that when multiple 
+                                        // images are inserted at the same "top" index (0), they appear 
+                                        // in their correct generation order (1, 2, 3...) top-down.
+                                        const processedList = [...selected].reverse();
 
-                                        for (let i = 0; i < selected.length; i++) {
-                                            const p = selected[i];
-                                            // Only allow first image to set hero if no hero exists
-                                            const shouldSetHero = i === 0 && !hasHero;
+                                        for (let i = 0; i < processedList.length; i++) {
+                                            const p = processedList[i];
+                                            const article = articles.find(a => a.id === articleId);
+                                            const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+
+                                            // Only the first image in the ORIGINAL order should set the hero if missing
+                                            const isLastInReversed = i === processedList.length - 1;
+                                            const shouldSetHero = isLastInReversed && !hasHero;
+
                                             const updatedContent = await generateAndInsertImage(p, currentContent, shouldSetHero);
                                             if (updatedContent) {
                                                 currentContent = updatedContent;
@@ -818,11 +858,33 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Section Title</label>
-                                    <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Introduction..." className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50" />
+                                    <input
+                                        type="text"
+                                        value={newTitle}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setNewTitle(val);
+                                            if (val.toLowerCase().includes('hero')) setNewIsHero(true);
+                                        }}
+                                        placeholder="e.g. Introduction..."
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Prompt Description</label>
                                     <textarea value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)} placeholder="Describe the image..." rows={4} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50 resize-none" />
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => setNewIsHero(!newIsHero)}
+                                        className={clsx(
+                                            "flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-xs font-black uppercase tracking-widest",
+                                            newIsHero ? "bg-amber-500/20 border-amber-500 text-amber-500 shadow-lg shadow-amber-500/10" : "bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-500"
+                                        )}
+                                    >
+                                        <Star size={14} fill={newIsHero ? "currentColor" : "none"} />
+                                        Is Hero Prompt
+                                    </button>
                                 </div>
                                 <button onClick={handleAddManual} disabled={!newTitle || !newPrompt} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20">Save Manual Prompt</button>
                             </div>
@@ -856,13 +918,34 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     {editingId === prompt.id ? (
                                         <div className="space-y-4" onClick={e => e.stopPropagation()}>
                                             <div className="flex justify-between items-center bg-slate-950/50 p-2 rounded-xl border border-slate-700">
-                                                <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="bg-transparent text-sm text-white w-full outline-none px-2" />
+                                                <input
+                                                    type="text"
+                                                    value={editTitle}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        setEditTitle(val);
+                                                        if (val.toLowerCase().includes('hero')) setEditIsHero(true);
+                                                    }}
+                                                    className="bg-transparent text-sm text-white w-full outline-none px-2"
+                                                />
                                                 <div className="flex gap-1">
                                                     <button onClick={() => handleSaveEdit(prompt.id)} className="p-2 text-emerald-400 hover:bg-emerald-400/10 rounded-lg"><Save size={18} /></button>
                                                     <button onClick={() => setEditingId(null)} className="p-2 text-slate-400 hover:bg-slate-400/10 rounded-lg"><X size={18} /></button>
                                                 </div>
                                             </div>
                                             <textarea value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} rows={3} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-3 text-sm text-slate-300 resize-none outline-none focus:ring-1 focus:ring-indigo-500/30" />
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => setEditIsHero(!editIsHero)}
+                                                    className={clsx(
+                                                        "flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-black uppercase tracking-widest",
+                                                        editIsHero ? "bg-amber-500/20 border-amber-500 text-amber-500" : "bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700"
+                                                    )}
+                                                >
+                                                    <Star size={12} fill={editIsHero ? "currentColor" : "none"} />
+                                                    Hero Mark
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <>

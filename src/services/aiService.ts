@@ -681,7 +681,8 @@ ${content}
 export interface ImagePromptDraft {
     sectionTitle: string;
     prompt: string;
-    isHero?: boolean;
+    rationale: string;
+    isHero: boolean;
     heroReasoning?: string; // Analysis of visual choices
 }
 
@@ -719,16 +720,23 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     const promptText = `Analyze the following blog post and create image generation prompts for the best sections to illustrate.
     
     CRITICAL CONSTRAINT: You must generate exactly ${targetImageCount} prompts in total. 
-
-    LAYOUT PRIORITY: Your primary goal is to follow the "Configuration & Placement Rules" below. Only if the rules are vague should you use your own judgement to distribute images. 
-    - **CRITICAL**: If the rules say "all at the top", "cluster at start", etc., you MUST use "Introduction" for ALL body images and IGNORE the numbered headers for "sectionTitle".
-    - **CRITICAL**: Do NOT distribute across headers if the user explicitly asks for a single location.
+    
+    FRESH INTERPRETATION: Do not simply repeat common or previously generated visual interpretations. Provide a completely fresh, creative perspective for this specific request. [Request ID: ${Date.now()}]
+    LAYOUT PRIORITY & FIXED PLACEMENT MODE:
+    Your primary goal is to follow the "Configuration & Placement Rules" below. 
+    - **CRITICAL**: If the rules say "all at the top", "cluster at start", "put all images in section X", "contiguous at top", "one immediately above the next at the top", etc., you are in FIXED PLACEMENT MODE.
+    - In FIXED PLACEMENT MODE, you MUST use ONLY "Introduction" for ALL body images. Do NOT use any other section titles, regardless of the content.
+    - **IGNORE** the numbered headers (3 onwards) for body images in this mode.
+    - Do NOT distribute across headers.
+    - If "Include Hero" is enabled, generate exactly ONE "Hero Image" (isHero: true) and use "Introduction" (isHero: false) for ALL other requested prompts.
+    - **CRITICAL**: ONLY the "Hero Image" should have "isHero: true". Images for the "Introduction" or other sections MUST have "isHero: false".
 
     CRITICAL: You MUST use the EXACT section titles provided below for the "sectionTitle" field. Do not modify, shorten, or paraphrase them.
 
     Available Sections (use these EXACT titles):
-    1. "Introduction" (Virtual section representing the very top of the article)
-    ${headers.length > 0 ? headers.map((h, i) => `${i + 2}. "${h}"`).join('\n') : ''}
+    ${includeHero ? '1. "Hero Image" (Conceptual high-impact visual for the article banner)\n' : ''}
+    ${includeHero ? '2. "Introduction" (Virtual section representing the very top of the article body)\n' : '1. "Introduction" (Virtual section representing the very top of the article body)\n'}
+    ${headers.length > 0 ? headers.map((h, i) => `${i + (includeHero ? 3 : 2)}. "${h}"`).join('\n') : ''}
 
     ${guidelines}
 
@@ -757,6 +765,9 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
 
     Format your response as a JSON object with a "prompts" array. Each object in the array should have fields: "sectionTitle", "prompt", "rationale", "isHero" (boolean), and "heroReasoning" (string, for hero only).
     `;
+
+    console.log('[AI Service] Layout Instructions sent to Gemini:', layoutInstructions);
+    console.log('[AI Service] Sections provided:', ['Introduction', ...headers]);
 
     try {
         const response = await fetch(`${GEMINI_API_URL}/v1beta/models/gemini-2.0-flash:generateContent?key=${settings.geminiApiKey}`, {
@@ -829,6 +840,10 @@ export const generateImage = async (prompt: string, settings: Settings): Promise
         'gemini-2.0-flash-exp'
     ];
 
+    // To ensure a "fresh interpretation" and bypass potential backend caching, 
+    // we append a unique entropy string and a "Fresh Interpretation" directive.
+    const entropy = `\n\n[Instruction: Provide a completely fresh, unique interpretation of this prompt. Ignore any previous versions. Request ID: ${Date.now()}-${Math.random().toString(36).substring(7)}]`;
+    const finalPrompt = prompt + entropy;
     let lastError = '';
 
     for (const model of models) {
@@ -838,10 +853,11 @@ export const generateImage = async (prompt: string, settings: Settings): Promise
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                cache: 'no-store', // Explicitly bypass browser cache
                 body: JSON.stringify({
                     contents: [{
                         parts: [{
-                            text: prompt
+                            text: finalPrompt
                         }]
                     }]
                 })

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store';
 import {
     X, Save, Sparkles, LayoutTemplate, Plus,
-    Trash2, ChevronDown, CheckCircle
+    Trash2, ChevronDown, CheckCircle, Star
 } from 'lucide-react';
 import StyleOptionsSelector from './StyleOptionsSelector';
 import type { StyleOptions, ArticleLayoutPreset, LayoutConfig } from '../types';
@@ -127,6 +127,17 @@ const PromptConfigModal = ({
         }
         await updateSettings({
             layoutPresets: updatedPresets
+        });
+    };
+
+    const handleSetGlobalDefault = async () => {
+        if (!activeLayoutPresetId || !activeLayoutPreset) return;
+
+        await updateSettings({
+            activeLayoutPresetId: activeLayoutPresetId,
+            layoutNumImages: activeLayoutPreset.imageCount,
+            layoutIncludeHero: activeLayoutPreset.includeHero,
+            layoutInstructions: activeLayoutPreset.placementInstructions
         });
     };
 
@@ -311,6 +322,26 @@ const PromptConfigModal = ({
                                         >
                                             <Trash2 size={16} />
                                         </button>
+                                    )}
+
+                                    {/* Set as Global Default Button */}
+                                    {activeLayoutPresetId && settings.activeLayoutPresetId !== activeLayoutPresetId && (
+                                        <button
+                                            onClick={handleSetGlobalDefault}
+                                            className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-400 hover:text-amber-400 hover:border-amber-400/30 transition-all flex items-center gap-2 text-xs font-bold"
+                                            title="Set as Global Default for all new articles"
+                                        >
+                                            <Star size={14} />
+                                            Set Default
+                                        </button>
+                                    )}
+
+                                    {/* Global Default Indicator */}
+                                    {activeLayoutPresetId && settings.activeLayoutPresetId === activeLayoutPresetId && (
+                                        <div className="px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 flex items-center gap-2 text-xs font-bold">
+                                            <Star size={14} fill="currentColor" />
+                                            Global Default
+                                        </div>
                                     )}
                                 </div>
 
