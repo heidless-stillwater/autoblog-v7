@@ -16,6 +16,7 @@ import {
     Upload,
     Square,
     Sparkles,
+    LayoutTemplate,
     Plus,
     Loader2,
     RotateCcw
@@ -873,12 +874,33 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                             <div className="flex flex-wrap items-center gap-2 mb-3">
                                                 <div className="relative">
                                                     <select
+                                                        value={activeLayoutPresetId || ''}
+                                                        onChange={(e) => handleLayoutPresetChange(e.target.value === 'custom' ? null : e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
+                                                    >
+                                                        <option value="" disabled>Select Layout</option>
+                                                        {(settings.layoutPresets || []).map(p => (
+                                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                                        ))}
+                                                        <option value="custom">Custom</option>
+                                                    </select>
+                                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                        <LayoutTemplate size={12} />
+                                                    </div>
+                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                        <ChevronDown size={10} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="relative">
+                                                    <select
                                                         value={prompt.presetId || ''}
                                                         onChange={(e) => handleUpdatePresetForPrompt(prompt.id, e.target.value)}
                                                         onClick={(e) => e.stopPropagation()}
                                                         className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
                                                     >
-                                                        <option value="">No Preset Applied</option>
+                                                        <option value="">No Style Preset</option>
                                                         <optgroup label="Standard Styles">
                                                             {STANDARD_PRESETS.map(p => (
                                                                 <option key={p.id} value={p.id}>{p.name}</option>
