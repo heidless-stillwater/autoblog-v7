@@ -61,6 +61,11 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
     const [isProcessing, setIsProcessing] = useState(false);
     const [viewingHistoryTitle, setViewingHistoryTitle] = useState<string | null>(null);
+    const [generationProgress, setGenerationProgress] = useState<{
+        current: number,
+        total: number,
+        message: string
+    } | null>(null);
 
     // Form states
     const [newTitle, setNewTitle] = useState('');
@@ -540,6 +545,41 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         await updateImagePrompt(prompt.id, { isPromptInserted: true });
     };
 
+    const generateImageOnly = async (prompt: ImagePrompt): Promise<{ compressedUrl: string, promptId: string } | null> => {
+        setProcessingIds(prev => new Set(prev).add(prompt.id));
+        try {
+            let finalPromptText = prompt.prompt;
+            const pId = prompt.presetId;
+            if (pId) {
+                const preset = allPresets.find(p => p.id === pId);
+                if (preset) {
+                    const styleParts = Object.values(preset.styleOptions || {}).filter(v => !!v);
+                    if (styleParts.length > 0) {
+                        finalPromptText = `${prompt.prompt}, style: ${styleParts.join(', ')}`;
+                    }
+                }
+            }
+            if (layoutConfig.instructions && layoutConfig.instructions.trim()) {
+                finalPromptText = `${finalPromptText}. Guidance: ${layoutConfig.instructions.trim()}`;
+            }
+
+            const result = await generateImage(finalPromptText, settings);
+            if (result.error || !result.imageUrl) return null;
+
+            const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
+            return { compressedUrl, promptId: prompt.id };
+        } catch (err) {
+            console.error(err);
+            return null;
+        } finally {
+            setProcessingIds(prev => {
+                const next = new Set(prev);
+                next.delete(prompt.id);
+                return next;
+            });
+        }
+    };
+
     const generateAndInsertImage = async (prompt: ImagePrompt, baseContent: string, shouldSetHero: boolean = true): Promise<string | null> => {
         console.log(`🚀 [generateAndInsertImage] Processing: "${prompt.sectionTitle}" (isHero: ${prompt.isHero})`);
         setProcessingIds(prev => new Set(prev).add(prompt.id));
@@ -793,31 +833,70 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     onClick={async () => {
                                         setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
-                                        // Mark all as inserted at once if we are doing bulk
-                                        let currentContent = content;
+                                        setGenerationProgress({ current: 0, total: selected.length, message: 'Starting parallel generation...' });
 
-                                        // We reverse the list for the insertion loop so that when multiple 
-                                        // images are inserted at the same "top" index (0), they appear 
-                                        // in their correct generation order (1, 2, 3...) top-down.
+                                        // 1. Parallel Generation Stage
+                                        const results: ({ compressedUrl: string, promptId: string } | null)[] = [];
+                                        let completed = 0;
+
+                                        await Promise.all(selected.map(async (p) => {
+                                            const res = await generateImageOnly(p);
+                                            completed++;
+                                            setGenerationProgress(prev => prev ? {
+                                                ...prev,
+                                                current: completed,
+                                                message: `Generated ${completed} of ${selected.length} images...`
+                                            } : null);
+                                            results.push(res);
+                                        }));
+
+                                        setGenerationProgress(prev => prev ? { ...prev, message: 'Inserting into article...' } : null);
+
+                                        // 2. Sequential Insertion Stage (to preserve order)
+                                        let currentContent = content;
                                         const processedList = [...selected].reverse();
 
                                         for (let i = 0; i < processedList.length; i++) {
                                             const p = processedList[i];
+                                            const result = results.find(r => r?.promptId === p.id);
+                                            if (!result) continue;
+
                                             const article = articles.find(a => a.id === articleId);
                                             const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-
-                                            // Only the first image in the ORIGINAL order should set the hero if missing
                                             const isLastInReversed = i === processedList.length - 1;
                                             const shouldSetHero = isLastInReversed && !hasHero;
 
-                                            const updatedContent = await generateAndInsertImage(p, currentContent, shouldSetHero);
-                                            if (updatedContent) {
-                                                currentContent = updatedContent;
+                                            // Re-use logic from generateAndInsertImage but without the actual generation
+                                            const compressedUrl = result.compressedUrl;
+                                            await addMedia({
+                                                name: `Section-${p.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
+                                                type: 'image/jpeg',
+                                                url: compressedUrl,
+                                                createdAt: Date.now(),
+                                                size: Math.round((compressedUrl.length * 3) / 4)
+                                            });
+
+                                            const isHeroImage = !!p.isHero || p.sectionTitle.toLowerCase() === 'hero image';
+                                            if (shouldSetHero && isHeroImage) {
+                                                await updateArticle(articleId, { heroImage: compressedUrl });
+                                            }
+
+                                            if (isHeroImage) {
+                                                await updateImagePrompt(p.id, { isImageInserted: true });
+                                            } else {
+                                                const headerIndex = findHeaderIndex(p.sectionTitle, currentContent);
+                                                const imageMarkdown = `\n![${p.sectionTitle}](${compressedUrl})\n\n`;
+                                                if (headerIndex !== -1) {
+                                                    currentContent = currentContent.slice(0, headerIndex) + imageMarkdown + currentContent.slice(headerIndex);
+                                                } else {
+                                                    currentContent = currentContent + imageMarkdown;
+                                                }
+                                                await updateImagePrompt(p.id, { isImageInserted: true });
                                             }
                                         }
 
-                                        // Update content once at the end with all accumulated changes
                                         onUpdateContent(currentContent);
+                                        setGenerationProgress(null);
                                         setIsProcessing(false);
                                         setSelectedIds(new Set());
                                     }}
@@ -845,6 +924,27 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     <Trash2 size={14} />
                                     Delete
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Progress Bar UI */}
+                    {generationProgress && (
+                        <div className="mb-6 p-4 bg-slate-900/50 border border-slate-700/50 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Loader2 size={12} className="animate-spin" />
+                                    {generationProgress.message}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                    {Math.round((generationProgress.current / (generationProgress.total || 1)) * 100)}%
+                                </span>
+                            </div>
+                            <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                <div
+                                    className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all duration-500 ease-out"
+                                    style={{ width: `${(generationProgress.current / (generationProgress.total || 1)) * 100}%` }}
+                                />
                             </div>
                         </div>
                     )}
