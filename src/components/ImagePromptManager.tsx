@@ -79,13 +79,17 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>('preset-standard-vintage');
 
+    const currentArticle = articles.find(a => a.id === articleId);
+
     // Layout Config State (Per-Article)
     const [layoutConfig, setLayoutConfig] = useState({
-        imageCount: settings.layoutNumImages || 3,
-        includeHero: settings.layoutIncludeHero ?? true,
-        instructions: settings.layoutInstructions || ''
+        imageCount: (currentArticle?.layoutConfig?.imageCount ?? settings.layoutNumImages) || 3,
+        includeHero: (currentArticle?.layoutConfig?.includeHero ?? settings.layoutIncludeHero) ?? true,
+        instructions: (currentArticle?.layoutConfig?.instructions ?? settings.layoutInstructions) || ''
     });
-    const [activeLayoutPresetId, setActiveLayoutPresetId] = useState<string | null>(settings.activeLayoutPresetId || 'preset-base-layout-0');
+    const [activeLayoutPresetId, setActiveLayoutPresetId] = useState<string | null>(
+        (currentArticle?.activeLayoutPresetId ?? settings.activeLayoutPresetId) || 'preset-base-layout-0'
+    );
 
     const [confirmModal, setConfirmModal] = useState<{
         message: string | React.ReactNode;
@@ -96,6 +100,21 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         showCancel?: boolean;
     } | null>(null);
 
+    // Persist layout changes to article
+    useEffect(() => {
+        if (currentArticle) {
+            const hasChanged =
+                currentArticle.activeLayoutPresetId !== activeLayoutPresetId ||
+                JSON.stringify(currentArticle.layoutConfig) !== JSON.stringify(layoutConfig);
+
+            if (hasChanged) {
+                updateArticle(articleId, {
+                    layoutConfig,
+                    activeLayoutPresetId
+                });
+            }
+        }
+    }, [layoutConfig, activeLayoutPresetId, articleId, currentArticle, updateArticle]);
 
     const STANDARD_PRESETS: PromptPreset[] = [
         {

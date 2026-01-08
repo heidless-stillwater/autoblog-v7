@@ -718,13 +718,17 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
 
     const promptText = `Analyze the following blog post and create image generation prompts for the best sections to illustrate.
     
-    CRITICAL CONSTRAINT: You must generate exactly ${targetImageCount} prompts in total. Choose the most visually impactful sections to illustrate, distributing them as instructed.
+    CRITICAL CONSTRAINT: You must generate exactly ${targetImageCount} prompts in total. 
+
+    LAYOUT PRIORITY: Your primary goal is to follow the "Configuration & Placement Rules" below. Only if the rules are vague should you use your own judgement to distribute images. 
+    - **CRITICAL**: If the rules say "all at the top", "cluster at start", etc., you MUST use "Introduction" for ALL body images and IGNORE the numbered headers for "sectionTitle".
+    - **CRITICAL**: Do NOT distribute across headers if the user explicitly asks for a single location.
 
     CRITICAL: You MUST use the EXACT section titles provided below for the "sectionTitle" field. Do not modify, shorten, or paraphrase them.
 
     Available Sections (use these EXACT titles):
-    ${headers.length > 0 ? headers.map((h, i) => `${i + 1}. "${h}"`).join('\n') : 'No headers found. Please identify logical sections.'}
-    *. "Introduction" (Use this for the very top of the article, even if not a literal header)
+    1. "Introduction" (Virtual section representing the very top of the article)
+    ${headers.length > 0 ? headers.map((h, i) => `${i + 2}. "${h}"`).join('\n') : ''}
 
     ${guidelines}
 
@@ -732,7 +736,7 @@ export const generateImagePrompts = async (content: string, settings: Settings, 
     ${customInstructions ? `Additional Style/User Instructions:\n${customInstructions}` : ''}
 
     For each section, provide:
-    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly, "Introduction" for the top, or "Hero Image" if applicable).
+    1. A short, descriptive "sectionTitle" (MUST match one of the titles above exactly, or "Hero Image" if applicable).
     2. A highly detailed image generation prompt (approx 60-100 words).
     3. Rationale: Why this visual represents this specific section.
     

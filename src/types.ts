@@ -131,6 +131,8 @@ export interface Article {
     createdAt: number;
     updatedAt: number;
     heroImage?: string; // Generated image URL
+    layoutConfig?: LayoutConfig; // Per-article layout settings
+    activeLayoutPresetId?: string | null; // ID of the currently active layout preset for this article
 }
 
 export interface ImagePrompt {
