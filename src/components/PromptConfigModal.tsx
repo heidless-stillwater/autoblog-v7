@@ -79,7 +79,7 @@ const PromptConfigModal = ({
         : true; // If no active preset, it's effectively "Custom"
 
     const handleApplyLayoutPreset = (presetId: string) => {
-        onLayoutPresetChange(presetId);
+        onLayoutPresetChange(presetId === 'custom' ? null : presetId);
     };
 
     const handleSaveLayoutPreset = async () => {

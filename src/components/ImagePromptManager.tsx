@@ -530,13 +530,24 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     createdAt: Date.now(),
                     size: Math.round((compressedUrl.length * 3) / 4)
                 });
-                // Only set hero image if shouldSetHero is true
-                if (shouldSetHero) {
+                // Check if this is a hero image prompt
+                const isHeroImage = !!prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image';
+
+                // Only set hero image if shouldSetHero is true AND it is a hero prompt
+                if (shouldSetHero && isHeroImage) {
                     const article = articles.find(a => a.id === articleId);
                     const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
                     if (!hasHero) {
                         await updateArticle(articleId, { heroImage: compressedUrl });
                     }
+                }
+
+                // If it IS a hero image, we generally do NOT want it in the body content 
+                // because it's already displayed as the article banner.
+                // We mark it as inserted so it doesn't look pending.
+                if (isHeroImage) {
+                    await updateImagePrompt(prompt.id, { isImageInserted: true });
+                    return baseContent; // Return unchanged content
                 }
                 const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
                 const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
