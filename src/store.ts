@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost, TopicQueueSnapshot, GenHistory } from './types';
-import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService, topicQueueService, genHistoryService } from './services/firestoreService';
+import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService, topicQueueService, genHistoryService, mediaTagsService } from './services/firestoreService';
 import { perplexityService } from './services/perplexityService';
 
 interface AppState {
@@ -12,6 +12,7 @@ interface AppState {
     articles: Article[];
     perplexityPrompts: PerplexityPrompt[];
     imagePrompts: ImagePrompt[];
+    mediaTags: string[];
     isLoading: boolean;
     isInitialized: boolean;
 
@@ -38,6 +39,10 @@ interface AppState {
     addMedia: (item: Omit<MediaItem, 'id'>) => Promise<void>;
     updateMedia: (id: string, updates: Partial<MediaItem>) => Promise<void>;
     deleteMedia: (id: string) => Promise<void>;
+    addMediaTag: (name: string) => Promise<void>;
+    deleteMediaTag: (name: string) => Promise<void>;
+    updateMediaTag: (oldName: string, newName: string) => Promise<void>;
+    loadMediaTags: () => Promise<void>;
 
     // Settings Actions
     updateSettings: (updates: Partial<Settings>) => Promise<void>;
@@ -152,6 +157,7 @@ export const useStore = create<AppState>()((set, get) => ({
     topicQueueSnapshots: [],
     queueLogs: [],
     genHistory: [],
+    mediaTags: [],
     isLoading: false,
     isInitialized: false,
 
@@ -181,7 +187,7 @@ export const useStore = create<AppState>()((set, get) => ({
         }
 
         try {
-            const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts, genHistory] = await Promise.all([
+            const [posts, media, settings, articles, perplexityPrompts, topicSets, imagePrompts, genHistory, mediaTags] = await Promise.all([
                 postsService.getAll(userId),
                 mediaService.getAll(userId),
                 settingsService.get(userId),
@@ -189,8 +195,16 @@ export const useStore = create<AppState>()((set, get) => ({
                 perplexityService.getAllResearch(userId),
                 topicSetsService.getAll(userId),
                 imagePromptsService.getAll(userId),
-                genHistoryService.getAll(userId)
+                genHistoryService.getAll(userId),
+                mediaTagsService.getAll(userId)
             ]);
+
+            // Initialize default tags if none exist
+            const finalTags = mediaTags.length > 0 ? mediaTags : ["Landscape", "Portrait", "Nature", "Abstract", "Product", "Tech", "Lifestyle"];
+            if (mediaTags.length === 0) {
+                // Background create defaults
+                Promise.all(finalTags.map(tag => mediaTagsService.create(userId, tag)));
+            }
 
             set({
                 posts,
@@ -201,6 +215,7 @@ export const useStore = create<AppState>()((set, get) => ({
                 topicSets,
                 imagePrompts,
                 genHistory,
+                mediaTags: finalTags,
                 isLoading: false,
                 isInitialized: true
             });
@@ -328,6 +343,73 @@ export const useStore = create<AppState>()((set, get) => ({
             console.error('Error deleting media:', error);
             set({ isLoading: false });
             throw error;
+        }
+    },
+
+    addMediaTag: async (name) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+        try {
+            await mediaTagsService.create(user.uid, name);
+            set(state => ({
+                mediaTags: [...new Set([...state.mediaTags, name])]
+            }));
+        } catch (error) {
+            console.error('Error adding media tag:', error);
+            throw error;
+        }
+    },
+
+    deleteMediaTag: async (name) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+        try {
+            await mediaTagsService.delete(user.uid, name);
+            set(state => ({
+                mediaTags: state.mediaTags.filter(t => t !== name)
+            }));
+        } catch (error) {
+            console.error('Error deleting media tag:', error);
+            throw error;
+        }
+    },
+
+    updateMediaTag: async (oldName, newName) => {
+        const { user } = get();
+        if (!user) throw new Error('User not authenticated');
+        try {
+            await mediaTagsService.update(user.uid, oldName, newName);
+            set(state => ({
+                mediaTags: state.mediaTags.map(t => t === oldName ? newName : t),
+                media: state.media.map(item => ({
+                    ...item,
+                    tags: item.tags?.map(t => t === oldName ? newName : t) || []
+                }))
+            }));
+            // Also need to update all media items that use this tag in Firestore
+            // For now, doing it locally, but ideally a cross-document update is needed.
+            // Requirement says "user has full CRUD access to tags", which usually implies renaming should affect usage.
+            // Let's keep it simple for now: local state is updated, but Firestore items might need manual update or a batch.
+            const { media } = get();
+            const itemsWithTag = media.filter(item => item.tags?.includes(oldName));
+            for (const item of itemsWithTag) {
+                const newTags = item.tags.map(t => t === oldName ? newName : t);
+                await mediaService.update(user.uid, item.id, { tags: newTags });
+            }
+        } catch (error) {
+            console.error('Error updating media tag:', error);
+            throw error;
+        }
+    },
+
+    loadMediaTags: async () => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            const tags = await mediaTagsService.getAll(user.uid);
+            set({ mediaTags: tags });
+        } catch (error) {
+            console.error('Error loading media tags:', error);
         }
     },
 

@@ -625,7 +625,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     type: 'image/jpeg',
                     url: compressedUrl,
                     createdAt: Date.now(),
-                    size: Math.round((compressedUrl.length * 3) / 4)
+                    size: Math.round((compressedUrl.length * 3) / 4),
+                    tags: []
                 });
                 // Check if this is a hero image prompt
                 const isHeroImage = !!prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image';
@@ -898,7 +899,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                 type: 'image/jpeg',
                                                 url: compressedUrl,
                                                 createdAt: Date.now(),
-                                                size: Math.round((compressedUrl.length * 3) / 4)
+                                                size: Math.round((compressedUrl.length * 3) / 4),
+                                                tags: []
                                             });
 
                                             const isHeroImage = !!p.isHero || p.sectionTitle.toLowerCase() === 'hero image';

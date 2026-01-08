@@ -18,6 +18,7 @@ export interface MediaItem {
     url: string; // Base64 or Blob URL
     createdAt: number;
     size: number;
+    tags: string[];
 }
 
 export interface StyleOptions {

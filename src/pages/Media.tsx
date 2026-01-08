@@ -11,7 +11,12 @@ import {
     Download,
     RefreshCw,
     LayoutGrid,
-    List
+    List,
+    Tag,
+    Plus,
+    X,
+    Settings as SettingsIcon,
+    Filter
 } from 'lucide-react';
 import clsx from 'clsx';
 import ConfirmModal from '../components/ConfirmModal';
@@ -20,11 +25,14 @@ import { saveAs } from 'file-saver';
 import { Sparkles } from 'lucide-react';
 
 const Media = () => {
-    const { media, addMedia, updateMedia, deleteMedia, posts } = useStore();
+    const { media, addMedia, updateMedia, deleteMedia, posts, mediaTags, addMediaTag, deleteMediaTag, updateMediaTag } = useStore();
     const [search, setSearch] = useState('');
+    const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [tagManagerOpen, setTagManagerOpen] = useState(false);
+    const [newItemTag, setNewItemTag] = useState<{ itemId: string; isOpen: boolean }>({ itemId: '', isOpen: false });
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -55,7 +63,11 @@ const Media = () => {
     const inputRef = useRef<HTMLInputElement>(null);
 
     const filteredMedia = media
-        .filter(item => item.name.toLowerCase().includes(search.toLowerCase()))
+        .filter(item => {
+            const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
+            const matchesTag = !selectedTag || (item.tags && item.tags.includes(selectedTag));
+            return matchesSearch && matchesTag;
+        })
         .sort((a, b) => b.createdAt - a.createdAt);
 
     // Sync media from posts on mount
@@ -76,7 +88,8 @@ const Media = () => {
                     type: 'image/jpeg',
                     url: post.heroImage,
                     createdAt: post.createdAt,
-                    size: 0 // Size unknown for existing images
+                    size: 0, // Size unknown for existing images
+                    tags: []
                 });
                 existingUrls.add(post.heroImage);
             }
@@ -92,7 +105,8 @@ const Media = () => {
                         type: 'image/jpeg',
                         url: imageUrl,
                         createdAt: post.createdAt,
-                        size: 0
+                        size: 0,
+                        tags: []
                     });
                     existingUrls.add(imageUrl);
                 }
@@ -106,7 +120,8 @@ const Media = () => {
                         type: 'application/octet-stream',
                         url: attachment,
                         createdAt: post.createdAt,
-                        size: 0
+                        size: 0,
+                        tags: []
                     });
                     existingUrls.add(attachment);
                 }
@@ -165,7 +180,8 @@ const Media = () => {
                 type,
                 url: dataUrl,
                 createdAt: Date.now(),
-                size: file.size
+                size: file.size,
+                tags: []
             });
         }
     };
@@ -316,6 +332,18 @@ const Media = () => {
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const toggleItemTag = async (itemId: string, tag: string) => {
+        const item = media.find(m => m.id === itemId);
+        if (!item) return;
+
+        const currentTags = item.tags || [];
+        const newTags = currentTags.includes(tag)
+            ? currentTags.filter(t => t !== tag)
+            : [...currentTags, tag];
+
+        await updateMedia(itemId, { tags: newTags });
     };
 
     return (
@@ -472,30 +500,54 @@ const Media = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 p-1 bg-slate-800 rounded-lg">
+                <div className="flex items-center gap-3 p-1 bg-slate-800 rounded-lg">
+                    <div className="flex items-center gap-2 px-2 border-r border-slate-700">
+                        <Filter size={16} className="text-slate-500" />
+                        <select
+                            value={selectedTag || ''}
+                            onChange={(e) => setSelectedTag(e.target.value || null)}
+                            className="bg-transparent text-sm text-slate-300 focus:outline-none cursor-pointer pr-4"
+                        >
+                            <option value="" className="bg-slate-800 text-slate-200">All Tags</option>
+                            {mediaTags.map(tag => (
+                                <option key={tag} value={tag} className="bg-slate-800 text-slate-200">{tag}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => setViewMode('grid')}
+                            className={clsx(
+                                "p-1.5 rounded-md transition-all",
+                                viewMode === 'grid'
+                                    ? "bg-indigo-600 text-white shadow-lg"
+                                    : "text-slate-400 hover:text-slate-200"
+                            )}
+                            title="Grid View"
+                        >
+                            <LayoutGrid size={18} />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={clsx(
+                                "p-1.5 rounded-md transition-all",
+                                viewMode === 'list'
+                                    ? "bg-indigo-600 text-white shadow-lg"
+                                    : "text-slate-400 hover:text-slate-200"
+                            )}
+                            title="List View"
+                        >
+                            <List size={18} />
+                        </button>
+                    </div>
+
                     <button
-                        onClick={() => setViewMode('grid')}
-                        className={clsx(
-                            "p-1.5 rounded-md transition-all",
-                            viewMode === 'grid'
-                                ? "bg-indigo-600 text-white shadow-lg"
-                                : "text-slate-400 hover:text-slate-200"
-                        )}
-                        title="Grid View"
+                        onClick={() => setTagManagerOpen(true)}
+                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-md transition-all border-l border-slate-700 pl-2 ml-1"
+                        title="Manage Tags"
                     >
-                        <LayoutGrid size={18} />
-                    </button>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={clsx(
-                            "p-1.5 rounded-md transition-all",
-                            viewMode === 'list'
-                                ? "bg-indigo-600 text-white shadow-lg"
-                                : "text-slate-400 hover:text-slate-200"
-                        )}
-                        title="List View"
-                    >
-                        <List size={18} />
+                        <SettingsIcon size={18} />
                     </button>
                 </div>
 
@@ -512,18 +564,20 @@ const Media = () => {
                             key={item.id}
                             onClick={() => toggleSelect(item.id)}
                             className={clsx(
-                                "group relative aspect-square bg-slate-900 border rounded-lg overflow-hidden cursor-pointer transition-all duration-300",
+                                "group relative aspect-square bg-slate-900 border rounded-lg cursor-pointer transition-all duration-300",
                                 selectedIds.has(item.id) ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-slate-800 hover:border-slate-700"
                             )}
                         >
-                            <img
-                                src={item.url}
-                                alt={item.name}
-                                className={clsx(
-                                    "w-full h-full object-cover transition-transform duration-500 group-hover:scale-110",
-                                    selectedIds.has(item.id) && "scale-105 opacity-80"
-                                )}
-                            />
+                            <div className="absolute inset-0 rounded-lg overflow-hidden">
+                                <img
+                                    src={item.url}
+                                    alt={item.name}
+                                    className={clsx(
+                                        "w-full h-full object-cover transition-transform duration-500 group-hover:scale-110",
+                                        selectedIds.has(item.id) && "scale-105 opacity-80"
+                                    )}
+                                />
+                            </div>
 
                             {/* Selection Checkbox */}
                             <div className={clsx(
@@ -538,15 +592,56 @@ const Media = () => {
                                 </div>
                             </div>
 
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-b-lg">
                                 <p className="text-xs text-white truncate mb-1">{item.name}</p>
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                    {item.tags?.map(tag => (
+                                        <span key={tag} className="text-[9px] px-1.5 py-0.5 bg-indigo-500/30 text-indigo-300 rounded border border-indigo-500/20">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
                                 <p className="text-[10px] text-slate-400">
                                     {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB • ` : ''}
                                     {format(item.createdAt, 'MMM d')}
                                 </p>
                             </div>
 
-                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="relative">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setNewItemTag({ itemId: item.id, isOpen: !newItemTag.isOpen || newItemTag.itemId !== item.id }); }}
+                                        className="p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white backdrop-blur shadow-lg border border-white/10"
+                                        title="Tags"
+                                    >
+                                        <Tag size={14} />
+                                    </button>
+                                    {newItemTag.isOpen && newItemTag.itemId === item.id && (
+                                        <div className="absolute right-0 top-full mt-2 w-56 bg-slate-800 border-2 border-slate-600 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] p-2 animate-in fade-in zoom-in-95 duration-200">
+                                            <div className="max-h-64 overflow-y-auto space-y-1 custom-scrollbar">
+                                                <div className="px-3 py-2 mb-1 border-b border-slate-700 flex justify-between items-center">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Tags</p>
+                                                    <X size={10} className="text-slate-500 cursor-pointer hover:text-white" onClick={(e) => { e.stopPropagation(); setNewItemTag({ itemId: '', isOpen: false }); }} />
+                                                </div>
+                                                {mediaTags.map(tag => (
+                                                    <button
+                                                        key={tag}
+                                                        onClick={(e) => { e.stopPropagation(); toggleItemTag(item.id, tag); }}
+                                                        className={clsx(
+                                                            "w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between font-bold",
+                                                            item.tags?.includes(tag)
+                                                                ? "bg-indigo-600 text-white ring-1 ring-indigo-400"
+                                                                : "bg-slate-700/50 hover:bg-slate-600 text-slate-100"
+                                                        )}
+                                                    >
+                                                        <span className="truncate">{tag}</span>
+                                                        {item.tags?.includes(tag) && <Check size={12} className="shrink-0 ml-2" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleDownload(item, e); }}
                                     className="p-1.5 bg-black/50 hover:bg-black/70 rounded text-white backdrop-blur"
@@ -588,6 +683,7 @@ const Media = () => {
                                     </th>
                                     <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Preview</th>
                                     <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Tags</th>
                                     <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Details</th>
                                     <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
                                     <th className="p-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
@@ -625,11 +721,44 @@ const Media = () => {
                                             </div>
                                         </td>
                                         <td className="p-4 hidden md:table-cell">
-                                            <div className="flex flex-col gap-0.5">
-                                                <span className="text-xs text-slate-400 capitalize">{item.type.split('/')[1] || item.type}</span>
-                                                <span className="text-[10px] text-slate-500">
-                                                    {item.size > 0 ? `${(item.size / 1024).toFixed(1)} KB` : 'Size unknown'}
-                                                </span>
+                                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                {item.tags?.map(tag => (
+                                                    <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-indigo-500/20 text-indigo-400 rounded border border-indigo-500/10">
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setNewItemTag({ itemId: item.id, isOpen: !newItemTag.isOpen || newItemTag.itemId !== item.id }); }}
+                                                        className="p-1 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all"
+                                                    >
+                                                        <Plus size={12} />
+                                                    </button>
+                                                    {newItemTag.isOpen && newItemTag.itemId === item.id && (
+                                                        <div className="absolute left-0 bottom-full mb-2 w-52 bg-slate-800 border-2 border-slate-600 rounded-xl shadow-2xl z-[100] p-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                            <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar">
+                                                                <div className="px-2 py-1.5 mb-1 border-b border-slate-700">
+                                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Tags</p>
+                                                                </div>
+                                                                {mediaTags.map(tag => (
+                                                                    <button
+                                                                        key={tag}
+                                                                        onClick={(e) => { e.stopPropagation(); toggleItemTag(item.id, tag); }}
+                                                                        className={clsx(
+                                                                            "w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between font-bold",
+                                                                            item.tags?.includes(tag)
+                                                                                ? "bg-indigo-600 text-white ring-1 ring-indigo-400"
+                                                                                : "bg-slate-700/50 hover:bg-slate-600 text-slate-100"
+                                                                        )}
+                                                                    >
+                                                                        <span className="truncate">{tag}</span>
+                                                                        {item.tags?.includes(tag) && <Check size={12} className="shrink-0 ml-2" />}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="p-4 hidden lg:table-cell">
@@ -683,6 +812,83 @@ const Media = () => {
                     cancelText={confirmModal.cancelText}
                     showCancel={confirmModal.showCancel}
                 />
+            )}
+
+            {/* Tag Manager Modal */}
+            {tagManagerOpen && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setTagManagerOpen(false)} />
+                    <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Tag className="text-indigo-400" size={20} />
+                                Manage Media Tags
+                            </h3>
+                            <button onClick={() => setTagManagerOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                            <form
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const input = e.currentTarget.elements.namedItem('newTag') as HTMLInputElement;
+                                    if (input.value.trim()) {
+                                        await addMediaTag(input.value.trim());
+                                        input.value = '';
+                                    }
+                                }}
+                                className="flex gap-2"
+                            >
+                                <input
+                                    name="newTag"
+                                    type="text"
+                                    placeholder="Add new tag..."
+                                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"
+                                />
+                                <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition-colors">
+                                    <Plus size={20} />
+                                </button>
+                            </form>
+
+                            <div className="space-y-2">
+                                {mediaTags.map(tag => (
+                                    <div key={tag} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 group">
+                                        <div className="flex items-center gap-3">
+                                            <Tag size={14} className="text-slate-500" />
+                                            <input
+                                                type="text"
+                                                defaultValue={tag}
+                                                onBlur={async (e) => {
+                                                    const newValue = e.target.value.trim();
+                                                    if (newValue && newValue !== tag) {
+                                                        await updateMediaTag(tag, newValue);
+                                                    } else {
+                                                        e.target.value = tag;
+                                                    }
+                                                }}
+                                                className="bg-transparent text-sm text-slate-200 focus:outline-none focus:text-white"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => deleteMediaTag(tag)}
+                                            className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-800 text-center">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                                {mediaTags.length} Global Tags Active
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

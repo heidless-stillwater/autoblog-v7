@@ -119,6 +119,43 @@ export const mediaService = {
     }
 };
 
+// Media Tags Service
+export const mediaTagsService = {
+    async getAll(userId: string): Promise<string[]> {
+        const tagsRef = collection(db, 'users', userId, 'mediaTags');
+        const snapshot = await getDocs(tagsRef);
+        if (snapshot.empty) return [];
+        return snapshot.docs.map(doc => doc.data().name as string);
+    },
+
+    async create(userId: string, name: string): Promise<void> {
+        const tagsRef = collection(db, 'users', userId, 'mediaTags');
+        const q = query(tagsRef, where('name', '==', name));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) return;
+        await addDoc(tagsRef, { name });
+    },
+
+    async delete(userId: string, name: string): Promise<void> {
+        const tagsRef = collection(db, 'users', userId, 'mediaTags');
+        const q = query(tagsRef, where('name', '==', name));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return;
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+    },
+
+    async update(userId: string, oldName: string, newName: string): Promise<void> {
+        const tagsRef = collection(db, 'users', userId, 'mediaTags');
+        const q = query(tagsRef, where('name', '==', oldName));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) return;
+        const docRef = snapshot.docs[0].ref;
+        await updateDoc(docRef, { name: newName });
+    }
+};
+
 // Settings Service
 export const settingsService = {
     async get(userId: string): Promise<Settings | null> {

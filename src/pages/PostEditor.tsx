@@ -94,7 +94,8 @@ const PostEditor = () => {
                     type: file.type,
                     url: imageUrl,
                     createdAt: Date.now(),
-                    size: file.size
+                    size: file.size,
+                    tags: []
                 });
             };
             reader.readAsDataURL(file);
@@ -245,8 +246,8 @@ const PostEditor = () => {
                         onChange={(e) => setStatus(e.target.value)}
                         className="bg-transparent border-b border-slate-800 focus:border-indigo-500 text-sm py-1 px-2 outline-none text-slate-300 cursor-pointer"
                     >
-                        <option value="draft">Draft</option>
-                        <option value="live">Live</option>
+                        <option value="draft" className="bg-slate-800 text-slate-200">Draft</option>
+                        <option value="live" className="bg-slate-800 text-slate-200">Live</option>
                     </select>
                 </div>
 

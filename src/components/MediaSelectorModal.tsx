@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '../store';
-import { Search, X, Image as ImageIcon, Check } from 'lucide-react';
+import { Search, X, Image as ImageIcon, Check, Tag } from 'lucide-react';
+import { clsx } from 'clsx';
 import type { MediaItem } from '../types';
 
 interface MediaSelectorModalProps {
@@ -9,9 +10,22 @@ interface MediaSelectorModalProps {
 }
 
 const MediaSelectorModal = ({ onSelect, onClose }: MediaSelectorModalProps) => {
-    const { media } = useStore();
+    const { media, mediaTags, updateMedia } = useStore();
     const [search, setSearch] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [newItemTag, setNewItemTag] = useState<{ itemId: string; isOpen: boolean }>({ itemId: '', isOpen: false });
+
+    const toggleItemTag = async (itemId: string, tag: string) => {
+        const item = media.find(m => m.id === itemId);
+        if (!item) return;
+
+        const currentTags = item.tags || [];
+        const newTags = currentTags.includes(tag)
+            ? currentTags.filter(t => t !== tag)
+            : [...currentTags, tag];
+
+        await updateMedia(itemId, { tags: newTags });
+    };
 
     const filteredMedia = useMemo(() => {
         return media
@@ -73,22 +87,60 @@ const MediaSelectorModal = ({ onSelect, onClose }: MediaSelectorModalProps) => {
                             {filteredMedia.map(item => (
                                 <div
                                     key={item.id}
-                                    onClick={() => setSelectedId(item.id)}
-                                    className={`group relative aspect-square border rounded-lg overflow-hidden cursor-pointer transition-all ${selectedId === item.id
+                                    className={clsx(
+                                        "group relative aspect-square border rounded-lg cursor-pointer transition-all",
+                                        selectedId === item.id
                                             ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-[1.02]'
                                             : 'border-slate-800 hover:border-slate-600 hover:scale-[1.02]'
-                                        }`}
+                                    )}
                                 >
-                                    <img
-                                        src={item.url}
-                                        alt={item.name}
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                                        <p className="text-xs text-white truncate w-full">{item.name}</p>
+                                    <div className="absolute inset-0 rounded-lg overflow-hidden" onClick={() => setSelectedId(item.id)}>
+                                        <img
+                                            src={item.url}
+                                            alt={item.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                                            <p className="text-xs text-white truncate w-full">{item.name}</p>
+                                        </div>
                                     </div>
+
+                                    {/* Tags Dropdown */}
+                                    <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                        <div className="relative">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setNewItemTag({ itemId: item.id, isOpen: !newItemTag.isOpen || newItemTag.itemId !== item.id }); }}
+                                                className="p-1 bg-black/60 hover:bg-black/80 rounded text-white backdrop-blur shadow-lg border border-white/10"
+                                                title="Tags"
+                                            >
+                                                <Tag size={12} />
+                                            </button>
+                                            {newItemTag.isOpen && newItemTag.itemId === item.id && (
+                                                <div className="absolute left-0 top-full mt-1 w-48 bg-slate-800 border-2 border-slate-600 rounded-lg shadow-2xl z-[100] p-1 animate-in fade-in zoom-in-95 duration-200">
+                                                    <div className="max-h-40 overflow-y-auto space-y-0.5 custom-scrollbar">
+                                                        {mediaTags.map(tag => (
+                                                            <button
+                                                                key={tag}
+                                                                onClick={(e) => { e.stopPropagation(); toggleItemTag(item.id, tag); }}
+                                                                className={clsx(
+                                                                    "w-full text-left px-2 py-1.5 rounded text-[10px] transition-all flex items-center justify-between font-bold",
+                                                                    item.tags?.includes(tag)
+                                                                        ? "bg-indigo-600 text-white"
+                                                                        : "bg-slate-700/50 hover:bg-slate-600 text-slate-100"
+                                                                )}
+                                                            >
+                                                                <span className="truncate">{tag}</span>
+                                                                {item.tags?.includes(tag) && <Check size={10} />}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {selectedId === item.id && (
-                                        <div className="absolute top-2 right-2 bg-indigo-500 text-white p-1 rounded-full shadow-lg">
+                                        <div className="absolute top-2 right-2 bg-indigo-500 text-white p-1 rounded-full shadow-lg z-10">
                                             <Check size={12} />
                                         </div>
                                     )}
