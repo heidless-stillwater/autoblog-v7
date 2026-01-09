@@ -334,6 +334,49 @@ const Media = () => {
         }
     };
 
+    const handleDeleteSelected = async () => {
+        const selectedMedia = media.filter(m => selectedIds.has(m.id));
+        if (selectedMedia.length === 0) return;
+
+        setConfirmModal({
+            message: `Are you sure you want to delete ${selectedMedia.length} selected item${selectedMedia.length > 1 ? 's' : ''}? This action cannot be undone.`,
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                setConfirmModal(null);
+                setIsProcessing(true);
+                setProgress({ percent: 0, message: 'Deleting items...' });
+
+                try {
+                    const total = selectedMedia.length;
+                    for (let i = 0; i < selectedMedia.length; i++) {
+                        const item = selectedMedia[i];
+                        const progressPercent = Math.round(((i + 1) / total) * 100);
+                        setProgress({
+                            percent: progressPercent,
+                            message: `Deleting ${item.name} (${i + 1}/${total})...`
+                        });
+                        await deleteMedia(item.id);
+                    }
+
+                    setProgress({ percent: 100, message: 'Deletion complete!' });
+                    setTimeout(() => setProgress(null), 2000);
+                    setSelectedIds(new Set()); // Clear selection
+                } catch (error) {
+                    console.error('Delete Error:', error);
+                    setConfirmModal({
+                        message: 'Error during deletion. Some items may not have been deleted.',
+                        onConfirm: () => setConfirmModal(null),
+                        showCancel: false
+                    });
+                    setProgress(null);
+                } finally {
+                    setIsProcessing(false);
+                }
+            },
+            onCancel: () => setConfirmModal(null)
+        });
+    };
+
     const toggleItemTag = async (itemId: string, tag: string) => {
         const item = media.find(m => m.id === itemId);
         if (!item) return;
@@ -452,15 +495,26 @@ const Media = () => {
                         <span className="hidden sm:inline">Sync from Posts</span>
                     </button>
                     {selectedIds.size > 0 && (
-                        <button
-                            onClick={handleDownloadSelectedZip}
-                            disabled={isProcessing}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 animate-in fade-in slide-in-from-right-4"
-                            title="Download selected media as ZIP"
-                        >
-                            <Download size={18} />
-                            <span className="hidden sm:inline">Download Selected ({selectedIds.size})</span>
-                        </button>
+                        <>
+                            <button
+                                onClick={handleDownloadSelectedZip}
+                                disabled={isProcessing}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 animate-in fade-in slide-in-from-right-4"
+                                title="Download selected media as ZIP"
+                            >
+                                <Download size={18} />
+                                <span className="hidden sm:inline">Download Selected ({selectedIds.size})</span>
+                            </button>
+                            <button
+                                onClick={handleDeleteSelected}
+                                disabled={isProcessing}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 animate-in fade-in slide-in-from-right-4"
+                                title="Delete selected media"
+                            >
+                                <Trash2 size={18} />
+                                <span className="hidden sm:inline">Delete Selected ({selectedIds.size})</span>
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
