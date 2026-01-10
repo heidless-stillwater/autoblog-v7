@@ -554,7 +554,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         await updateImagePrompt(prompt.id, { isPromptInserted: true });
     };
 
-    const generateImageOnly = async (prompt: ImagePrompt): Promise<{ compressedUrl: string, promptId: string } | null> => {
+    const generateImageOnly = async (prompt: ImagePrompt): Promise<{ compressedUrl: string, promptId: string, finalPromptText: string } | null> => {
         setProcessingIds(prev => new Set(prev).add(prompt.id));
         try {
             let finalPromptText = prompt.prompt;
@@ -576,7 +576,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             if (result.error || !result.imageUrl) return null;
 
             const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
-            return { compressedUrl, promptId: prompt.id };
+            return { compressedUrl, promptId: prompt.id, finalPromptText };
         } catch (err) {
             console.error(err);
             return null;
@@ -904,13 +904,22 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
                                             // Re-use logic from generateAndInsertImage but without the actual generation
                                             const compressedUrl = result.compressedUrl;
+                                            const finalPromptText = (result as any).finalPromptText || p.prompt;
+
+                                            const articleTitle = article?.topic || 'Unknown Article';
+
                                             await addMedia({
                                                 name: `Section-${p.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
                                                 type: 'image/jpeg',
                                                 url: compressedUrl,
                                                 createdAt: Date.now(),
                                                 size: Math.round((compressedUrl.length * 3) / 4),
-                                                tags: []
+                                                tags: [
+                                                    `Article: ${articleId} - ${articleTitle}`,
+                                                    'CustomPromptUser'
+                                                ],
+                                                mediaPrompt: finalPromptText,
+                                                usedIn: [articleId]
                                             });
 
                                             const isHeroImage = !!p.isHero || p.sectionTitle.toLowerCase() === 'hero image';

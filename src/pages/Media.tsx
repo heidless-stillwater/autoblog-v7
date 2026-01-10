@@ -12,6 +12,8 @@ import {
     RefreshCw,
     LayoutGrid,
     List,
+    Eye,
+    Edit2,
     Tag,
     Plus,
     X,
@@ -33,6 +35,8 @@ const Media = () => {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [tagManagerOpen, setTagManagerOpen] = useState(false);
     const [newItemTag, setNewItemTag] = useState<{ itemId: string; isOpen: boolean }>({ itemId: '', isOpen: false });
+    const [detailsModalItem, setDetailsModalItem] = useState<MediaItem | null>(null);
+    const [detailsModalMode, setDetailsModalMode] = useState<'show' | 'edit'>('show');
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -662,6 +666,13 @@ const Media = () => {
                             </div>
 
                             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setDetailsModalItem(item); setDetailsModalMode('show'); }}
+                                    className="p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white backdrop-blur shadow-lg border border-white/10"
+                                    title="Show Details"
+                                >
+                                    <Eye size={14} />
+                                </button>
                                 <div className="relative">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setNewItemTag({ itemId: item.id, isOpen: !newItemTag.isOpen || newItemTag.itemId !== item.id }); }}
@@ -823,6 +834,13 @@ const Media = () => {
                                         <td className="p-4 text-right">
                                             <div className="flex justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                                 <button
+                                                    onClick={(e) => { e.stopPropagation(); setDetailsModalItem(item); setDetailsModalMode('show'); }}
+                                                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
+                                                    title="Show Details"
+                                                >
+                                                    <Eye size={14} />
+                                                </button>
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); handleDownload(item, e); }}
                                                     className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 transition-colors"
                                                     title="Download"
@@ -944,6 +962,182 @@ const Media = () => {
                     </div>
                 </div>
             )}
+
+            {/* Media Details Modal */}
+            {detailsModalItem && (() => {
+                const freshItem = media.find(m => m.id === detailsModalItem.id) || detailsModalItem;
+                return (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md" onClick={() => setDetailsModalItem(null)} />
+                        <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
+                            {/* Preview Area */}
+                            <div className="flex-1 bg-slate-950 flex items-center justify-center p-4 relative group">
+                                <img
+                                    src={freshItem.url}
+                                    alt={freshItem.name}
+                                    className="max-w-full max-h-[50vh] md:max-h-none object-contain shadow-2xl"
+                                />
+                                <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur px-3 py-1.5 rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <p className="text-[10px] text-slate-400 font-mono">
+                                        {freshItem.type} • {(freshItem.size / 1024).toFixed(1)} KB
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Details Area */}
+                            <div className="w-full md:w-80 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col">
+                                <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                                    <div className="flex gap-2 p-1 bg-slate-800 rounded-lg">
+                                        <button
+                                            onClick={() => setDetailsModalMode('show')}
+                                            className={clsx(
+                                                "p-1.5 rounded-md transition-all",
+                                                detailsModalMode === 'show' ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                            )}
+                                            title="Show Mode"
+                                        >
+                                            <Eye size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => setDetailsModalMode('edit')}
+                                            className={clsx(
+                                                "p-1.5 rounded-md transition-all",
+                                                detailsModalMode === 'edit' ? "bg-amber-600 text-white" : "text-slate-400 hover:text-slate-200"
+                                            )}
+                                            title="Edit Mode"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                    </div>
+                                    <button onClick={() => setDetailsModalItem(null)} className="text-slate-500 hover:text-white transition-colors">
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="p-6 flex-1 overflow-y-auto space-y-6">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Name</label>
+                                        {detailsModalMode === 'edit' ? (
+                                            <input
+                                                type="text"
+                                                value={detailsModalItem.name}
+                                                onChange={(e) => {
+                                                    const newName = e.target.value;
+                                                    setDetailsModalItem({ ...detailsModalItem, name: newName });
+                                                }}
+                                                onBlur={async () => {
+                                                    await updateMedia(detailsModalItem.id, { name: detailsModalItem.name });
+                                                }}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                            />
+                                        ) : (
+                                            <p className="text-sm font-medium text-white break-all">{detailsModalItem.name}</p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">AI Generation Prompt</label>
+                                        {detailsModalMode === 'edit' ? (
+                                            <textarea
+                                                value={detailsModalItem.mediaPrompt || ''}
+                                                onChange={(e) => {
+                                                    const newPrompt = e.target.value;
+                                                    setDetailsModalItem({ ...detailsModalItem, mediaPrompt: newPrompt });
+                                                }}
+                                                onBlur={async () => {
+                                                    await updateMedia(detailsModalItem.id, { mediaPrompt: detailsModalItem.mediaPrompt });
+                                                }}
+                                                placeholder="No prompt available"
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 min-h-[80px] font-mono leading-relaxed"
+                                            />
+                                        ) : (
+                                            <p className="text-sm text-slate-300 italic leading-relaxed pl-3 border-l-2 border-slate-700 font-mono">
+                                                {detailsModalItem.mediaPrompt || 'No AI prompt associated with this item.'}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Tags</label>
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                            {freshItem.tags?.map(tag => (
+                                                <span
+                                                    key={tag}
+                                                    className="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded-md text-xs border border-indigo-500/10 flex items-center gap-1"
+                                                >
+                                                    {tag}
+                                                    {detailsModalMode === 'edit' && (
+                                                        <X
+                                                            size={12}
+                                                            className="cursor-pointer hover:text-white"
+                                                            onClick={() => toggleItemTag(freshItem.id, tag)}
+                                                        />
+                                                    )}
+                                                </span>
+                                            ))}
+                                            {freshItem.tags?.length === 0 && (
+                                                <p className="text-xs text-slate-600 italic">No tags assigned</p>
+                                            )}
+                                        </div>
+
+                                        {detailsModalMode === 'edit' && (
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-bold text-slate-600 uppercase">Available Tags</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {mediaTags
+                                                        .filter(tag => !freshItem.tags?.includes(tag))
+                                                        .map(tag => (
+                                                            <button
+                                                                key={tag}
+                                                                onClick={() => toggleItemTag(freshItem.id, tag)}
+                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded text-[10px] transition-colors"
+                                                            >
+                                                                + {tag}
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Added On</label>
+                                        <p className="text-sm text-slate-300">{format(freshItem.createdAt, 'PPP p')}</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 border-t border-slate-800 bg-slate-950/20 space-y-3">
+                                    <button
+                                        onClick={() => copyToClipboard(freshItem.url, freshItem.id)}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                    >
+                                        {copiedId === freshItem.id ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                                        {copiedId === freshItem.id ? 'Copied Link' : 'Copy Public URL'}
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={(e) => handleDownload(freshItem, e as any)}
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 rounded-lg transition-colors text-sm font-medium"
+                                        >
+                                            <Download size={16} />
+                                            Download
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                handleDelete(freshItem.id, e as any);
+                                                setDetailsModalItem(null);
+                                            }}
+                                            className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
