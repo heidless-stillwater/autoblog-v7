@@ -11,7 +11,7 @@ vi.mock('../store', () => ({
 
 // Mock the AI service
 vi.mock('../services/aiService', () => ({
-    generateImage: vi.fn(),
+    generateImage: vi.fn(() => Promise.resolve({ imageUrl: 'http://test.com/image.jpg' })),
     DEFAULT_NANOBANANA_GUIDELINES: 'test guidelines'
 }));
 
@@ -52,18 +52,14 @@ describe('ImagePromptManager - Quick Gen Enhancements', () => {
         });
     });
 
-    it('adds a prompt without generation when "Generate Image Now" is toggled off', async () => {
+    it('adds a prompt without generation by default (Save Prompt)', async () => {
         render(<ImagePromptManager {...defaultProps} />);
 
         // Find input and type prompt
         const input = screen.getByPlaceholderText(/Enter a custom prompt/i);
         fireEvent.change(input, { target: { value: 'New Custom Prompt' } });
 
-        // Toggle off "Generate Image Now"
-        const toggle = screen.getByText(/Generate Image Now/i);
-        fireEvent.click(toggle);
-
-        // Button text should change
+        // Button text should be "Save Prompt" by default
         const saveButton = screen.getByText(/Save Prompt/i);
         fireEvent.click(saveButton);
 
@@ -76,6 +72,27 @@ describe('ImagePromptManager - Quick Gen Enhancements', () => {
 
         expect(generateImage).not.toHaveBeenCalled();
         expect(mockUpdateContent).not.toHaveBeenCalled();
+    });
+
+    it('generates an image when "Generate Image Now" is toggled ON', async () => {
+        render(<ImagePromptManager {...defaultProps} />);
+
+        // Find input and type prompt
+        const input = screen.getByPlaceholderText(/Enter a custom prompt/i);
+        fireEvent.change(input, { target: { value: 'Generate Me Now' } });
+
+        // Toggle ON
+        const toggle = screen.getByText(/Generate Image Now/i);
+        fireEvent.click(toggle);
+
+        // Button text should change to Quick Gen
+        const genButton = screen.getByText(/Quick Gen/i);
+        fireEvent.click(genButton);
+
+        await waitFor(() => {
+            expect(generateImage).toHaveBeenCalled();
+            expect(mockAddImagePrompt).toHaveBeenCalled();
+        });
     });
 
     it('sorts prompts correctly based on position', () => {

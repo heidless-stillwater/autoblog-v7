@@ -73,7 +73,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [selectedLocation, setSelectedLocation] = useState('top');
     const [selectedDirection, setSelectedDirection] = useState<'above' | 'below'>('above');
     const [isQuickGenerating, setIsQuickGenerating] = useState(false);
-    const [shouldGenerateNow, setShouldGenerateNow] = useState(true);
+    const [shouldGenerateNow, setShouldGenerateNow] = useState(false);
 
     // Form states
     const [editTitle, setEditTitle] = useState('');

@@ -1,37 +1,237 @@
 
 [1m[46m RUN [49m[22m [36mv4.0.16 [39m[90m/home/heidless/projects/heidless-ai/antigravity/BlogSystem/v7[39m
 
- [31m❯[39m src/components/ImagePromptManager.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 70[2mms[22m[39m
-[31m     [31m×[31m extracts headers from content correctly in the dropdown[39m[32m 51[2mms[22m[39m
-[31m     [31m×[31m updates genPromptCustom state on input[39m[32m 17[2mms[22m[39m
+[90mstdout[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2madds a prompt without generation by default (Save Prompt)
+[22m[39m🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
 
-[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[90mstdout[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2madds a prompt without generation by default (Save Prompt)
+[22m[39m🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
 
-[41m[1m FAIL [22m[49m src/components/ImagePromptManager.test.tsx[2m > [22mImagePromptManager - Quick Generate[2m > [22mextracts headers from content correctly in the dropdown
-[41m[1m FAIL [22m[49m src/components/ImagePromptManager.test.tsx[2m > [22mImagePromptManager - Quick Generate[2m > [22mupdates genPromptCustom state on input
-[31m[1mTypeError[22m: loadImagePrompts is not a function[39m
-[36m [2m❯[22m src/components/ImagePromptManager.tsx:[2m234:9[22m[39m
-    [90m232| [39m
-    [90m233| [39m    [34museEffect[39m(() [33m=>[39m {
-    [90m234| [39m        [34mloadImagePrompts[39m(articleId)[33m;[39m
-    [90m   | [39m        [31m^[39m
-    [90m235| [39m    }[33m,[39m [articleId])[33m;[39m
-    [90m236| [39m
-[90m [2m❯[22m Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:[2m25989:20[22m[39m
-[90m [2m❯[22m runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:[2m874:13[22m[39m
-[90m [2m❯[22m commitHookEffectListMount node_modules/react-dom/cjs/react-dom-client.development.js:[2m13249:29[22m[39m
-[90m [2m❯[22m commitHookPassiveMountEffects node_modules/react-dom/cjs/react-dom-client.development.js:[2m13336:11[22m[39m
-[90m [2m❯[22m commitPassiveMountOnFiber node_modules/react-dom/cjs/react-dom-client.development.js:[2m15484:13[22m[39m
-[90m [2m❯[22m recursivelyTraversePassiveMountEffects node_modules/react-dom/cjs/react-dom-client.development.js:[2m15439:11[22m[39m
-[90m [2m❯[22m commitPassiveMountOnFiber node_modules/react-dom/cjs/react-dom-client.development.js:[2m15519:11[22m[39m
-[90m [2m❯[22m flushPassiveEffects node_modules/react-dom/cjs/react-dom-client.development.js:[2m18432:9[22m[39m
-[90m [2m❯[22m node_modules/react-dom/cjs/react-dom-client.development.js:[2m17923:15[22m[39m
+[90mstdout[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2mgenerates an image when "Generate Image Now" is toggled ON
+[22m[39m🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+[90mstderr[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2mgenerates an image when "Generate Image Now" is toggled ON
+[22m[39mTypeError: Cannot read properties of undefined (reading 'error')
+    at handleQuickGenerate [90m(/home/heidless/projects/heidless-ai/antigravity/BlogSystem/v7/[39msrc/components/ImagePromptManager.tsx:579:28[90m)[39m
+[90m    at runNextTicks (node:internal/process/task_queues:65:5)[39m
+[90m    at processTimers (node:internal/timers:520:9)[39m
+
+[90mstdout[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2mgenerates an image when "Generate Image Now" is toggled ON
+[22m[39m🔍 Finding header for section: Header 1
+✅ Exact match found at index: [33m0[39m
+
+[90mstdout[2m | src/components/ImagePromptManager.quickgen.test.tsx[2m > [22m[2mImagePromptManager - Quick Gen Enhancements[2m > [22m[2msorts prompts correctly based on position
+[22m[39m🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+🔍 Finding header for section: Header 2
+✅ Exact match found at index: [33m21[39m
+
+ [31m❯[39m src/components/ImagePromptManager.quickgen.test.tsx [2m([22m[2m3 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1595[2mms[22m[39m
+     [32m✓[39m adds a prompt without generation by default (Save Prompt)[32m 110[2mms[22m[39m
+[31m     [31m×[31m generates an image when "Generate Image Now" is toggled ON[39m[33m 1098[2mms[22m[39m
+     [33m[2m✓[22m[39m sorts prompts correctly based on position [33m 385[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/ImagePromptManager.quickgen.test.tsx[2m > [22mImagePromptManager - Quick Gen Enhancements[2m > [22mgenerates an image when "Generate Image Now" is toggled ON
+[31m[1mAssertionError[22m[39m: expected "vi.fn()" to be called at least once
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center justify-between p-6 cursor-pointer hover:bg-slate-800/30 transition-colors"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"p-2 bg-purple-500/20 text-purple-400 rounded-lg"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-image"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mry[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"9"[39m
+                  [33mcy[39m=[32m"9"[39m
+                  [33mr[39m=[32m"2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-lg font-bold text-white"[39m
+              [36m>[39m
+                [0mImage Generation Prompts[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-slate-400"[39m
+              [36m>[39m
+                [0mManage visual storytelling for "[0m
+                [0mTest Topic[0m
+                [0m"[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-4"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"bg-slate-800 text-slate-300 text-xs font-medium px-2.5 py-0.5 rounded-full border border-slate-700"[39m
+            [36m>[39m
+              [0m2[0m
+              [0m Prompts[0m
+            [36m</span>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-up text-slate-500"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m18 15-6-6-6 6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"p-6 pt-0 border-t border-slate-800"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-lg flex items-start gap-3"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-circle-alert shrink-0 mt-0.5"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"18"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"18"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<circle[39m
+                [33mcx[39m=[32m"12"[39m
+                [33mcy[39m=[32m"12"[39m
+                [33mr[39m=[32m"10"[39m
+              [36m/>[39m
+              [36m<line[39m
+                [33mx1[39m=[32m"12"[39m
+                [33mx2[39m=[32m"12"[39m
+                [33my1[39m=[32m"8"[39m
+                [33my2[39m=[32m"12"[39m
+              [36m/>[39m
+              [36m<line[39m
+                [33mx1[39m=[32m"12"[39m
+                [33mx2[39m=[32m"12.01"[39m
+                [33my1[39m=[32m"16"[39m
+                [33my2[39m=[32m"16"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"text-sm"[39m
+            [36m>[39m
+              [0mFailed to handle custom prompt: Cannot read properties of undefined (reading 'error')[0m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"mt-6 p-4 bg-slate-900/50 border border-slate-800 rounded-xl space-y-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-sparkles text-indigo-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"12"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"12"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a...
+[36m [2m❯[22m src/components/ImagePromptManager.quickgen.test.tsx:[2m94:40[22m[39m
+    [90m 92| [39m        [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m 93| [39m            [34mexpect[39m(generateImage)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m 94| [39m            [34mexpect[39m(mockAddImagePrompt)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m   | [39m                                       [31m^[39m
+    [90m 95| [39m        })[33m;[39m
+    [90m 96| [39m    })[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
 
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
-[2m   Start at [22m 14:14:23
-[2m   Duration [22m 2.44s[2m (transform 347ms, setup 153ms, import 1.53s, tests 70ms, environment 551ms)[22m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 16:34:47
+[2m   Duration [22m 3.55s[2m (transform 263ms, setup 124ms, import 1.17s, tests 1.60s, environment 496ms)[22m
 
