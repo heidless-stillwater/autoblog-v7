@@ -295,8 +295,13 @@ export const useStore = create<AppState>()((set, get) => ({
 
         set({ isLoading: true });
         try {
-            const id = await mediaService.create(user.uid, item);
-            const newItem = { ...item, id };
+            const mediaItem = {
+                ...item,
+                mediaPrompt: item.mediaPrompt || '<none>',
+                usedIn: item.usedIn || []
+            };
+            const id = await mediaService.create(user.uid, mediaItem);
+            const newItem = { ...mediaItem, id };
             set((state) => ({
                 media: [newItem, ...state.media],
                 isLoading: false
@@ -343,6 +348,31 @@ export const useStore = create<AppState>()((set, get) => ({
             console.error('Error deleting media:', error);
             set({ isLoading: false });
             throw error;
+        }
+    },
+
+    // Helper to add article reference to media item
+    addArticleToMediaUsage: async (mediaId: string, articleId: string, articleTitle: string) => {
+        const { user, media, updateMedia } = get();
+        if (!user) throw new Error('User not authenticated');
+
+        const mediaItem = media.find(m => m.id === mediaId);
+        if (!mediaItem) return;
+
+        // Add article ID to usedIn array if not already present
+        const usedIn = mediaItem.usedIn || [];
+        if (!usedIn.includes(articleId)) {
+            const newUsedIn = [...usedIn, articleId];
+
+            // Add article tag
+            const articleTag = `Article: ${articleId} - ${articleTitle}`;
+            const tags = mediaItem.tags || [];
+            const newTags = tags.includes(articleTag) ? tags : [...tags, articleTag];
+
+            await updateMedia(mediaId, {
+                usedIn: newUsedIn,
+                tags: newTags
+            });
         }
     },
 

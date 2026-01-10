@@ -620,13 +620,23 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             }
             if (result.imageUrl) {
                 const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
+
+                // Get article title for tagging
+                const article = articles.find(a => a.id === articleId);
+                const articleTitle = article?.topic || 'Unknown Article';
+
                 await addMedia({
                     name: `Section-${prompt.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
                     type: 'image/jpeg',
                     url: compressedUrl,
                     createdAt: Date.now(),
                     size: Math.round((compressedUrl.length * 3) / 4),
-                    tags: []
+                    tags: [
+                        `Article: ${articleId} - ${articleTitle}`,
+                        'CustomPromptUser'
+                    ],
+                    mediaPrompt: finalPromptText,
+                    usedIn: [articleId]
                 });
                 // Check if this is a hero image prompt
                 const isHeroImage = !!prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image';

@@ -19,6 +19,8 @@ export interface MediaItem {
     createdAt: number;
     size: number;
     tags: string[];
+    mediaPrompt?: string; // The prompt used to generate this image
+    usedIn?: string[]; // Array of article IDs where this image is used
 }
 
 export interface StyleOptions {
