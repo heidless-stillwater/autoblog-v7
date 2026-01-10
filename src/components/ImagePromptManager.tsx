@@ -126,6 +126,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         showCancel?: boolean;
     } | null>(null);
 
+    const [batchChoice, setBatchChoice] = useState<'use-existing' | 'regenerate' | null>(null);
+
     // Persist layout changes to article ONLY IF they differ from what's currently saved
     useEffect(() => {
         if (currentArticle) {
@@ -681,90 +683,234 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
             });
         }
     };
+    const runBulkGeneration = async (selected: ImagePrompt[], choice: 'use-existing' | 'regenerate' | null) => {
+        setIsProcessing(true);
+        setGenerationProgress({ current: 0, total: selected.length, message: 'Starting bulk processing...' });
 
-    const generateAndInsertImage = async (prompt: ImagePrompt, baseContent: string, shouldSetHero: boolean = true): Promise<string | null> => {
-        console.log(`🚀 [generateAndInsertImage] Processing: "${prompt.sectionTitle}" (isHero: ${prompt.isHero})`);
+        try {
+            // 1. Parallel Generation/Selection Stage
+            const results: ({ compressedUrl: string, promptId: string, finalPromptText: string } | null)[] = [];
+            let completed = 0;
+
+            await Promise.all(selected.map(async (p) => {
+                let res: { compressedUrl: string, promptId: string, finalPromptText: string } | null = null;
+
+                if (p.imageUrl && choice === 'use-existing') {
+                    res = { compressedUrl: p.imageUrl, promptId: p.id, finalPromptText: p.prompt };
+                } else {
+                    res = await generateImageOnly(p);
+                }
+
+                completed++;
+                setGenerationProgress(prev => prev ? {
+                    ...prev,
+                    current: completed,
+                    message: `Processed ${completed} of ${selected.length} images...`
+                } : null);
+                results.push(res);
+            }));
+
+            setGenerationProgress(prev => prev ? { ...prev, message: 'Inserting into article...' } : null);
+
+            // 2. Sequential Insertion Stage (to preserve order)
+            let currentContent = content;
+
+            // Detect if we are clustering at the top or bottom
+            const firstBodyPrompt = selected.find(p => !p.isHero && p.sectionTitle.toLowerCase() !== 'hero image');
+            const targetIndex = firstBodyPrompt ? findHeaderIndex(firstBodyPrompt.sectionTitle, currentContent) : 0;
+
+            const shouldReverse = targetIndex === 0;
+            const processedList = shouldReverse ? [...selected].reverse() : [...selected];
+
+            for (let i = 0; i < processedList.length; i++) {
+                const p = processedList[i];
+                const result = results.find(r => r?.promptId === p.id);
+                if (!result) continue;
+
+                const article = articles.find(a => a.id === articleId);
+                const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+
+                const originalIndex = selected.findIndex(item => item.id === p.id);
+                const shouldSetHero = originalIndex === 0 && !hasHero;
+
+                const compressedUrl = result.compressedUrl;
+                const finalPromptText = result.finalPromptText || p.prompt;
+
+                // Only add to media library if it was actually regenerated
+                // If it was reused, it's already in the library.
+                const isReused = p.imageUrl && choice === 'use-existing';
+                if (!isReused) {
+                    const articleTitle = article?.topic || 'Unknown Article';
+                    await addMedia({
+                        name: `Section-${p.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        url: compressedUrl,
+                        createdAt: Date.now(),
+                        size: Math.round((compressedUrl.length * 3) / 4),
+                        tags: [
+                            `Article: ${articleId} - ${articleTitle}`,
+                            'CustomPromptUser'
+                        ],
+                        mediaPrompt: finalPromptText,
+                        usedIn: [articleId]
+                    });
+                }
+
+                const isHeroImage = !!p.isHero || p.sectionTitle.toLowerCase() === 'hero image';
+                if (shouldSetHero && isHeroImage) {
+                    await updateArticle(articleId, { heroImage: compressedUrl });
+                }
+
+                if (isHeroImage) {
+                    await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
+                } else {
+                    const headerIndex = findHeaderIndex(p.sectionTitle, currentContent);
+                    const imageMarkdown = `\n![${p.sectionTitle}](${compressedUrl})\n\n`;
+
+                    if (headerIndex >= 0) {
+                        currentContent = currentContent.slice(0, headerIndex) + imageMarkdown + currentContent.slice(headerIndex);
+                    } else {
+                        currentContent = currentContent + imageMarkdown;
+                    }
+                    await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
+                }
+            }
+
+            onUpdateContent(currentContent);
+        } catch (err) {
+            console.error('Bulk generation error:', err);
+            setError(`Bulk processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsProcessing(false);
+            setGenerationProgress(null);
+            setSelectedIds(new Set());
+        }
+    };
+
+    const showSmartChoiceModal = (title: string, onChoice: (choice: 'use-existing' | 'regenerate', applyToAll: boolean) => void) => {
+        let applyToAll = false;
+        setConfirmModal({
+            message: (
+                <div className="space-y-4">
+                    <p className="text-slate-300">
+                        An image already exists for <span className="text-white font-bold">{title}</span>.
+                        Would you like to use the existing image or regenerate a new one?
+                    </p>
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                        <input
+                            type="checkbox"
+                            id="applyToAll"
+                            onChange={(e) => applyToAll = e.target.checked}
+                            className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
+                        />
+                        <label htmlFor="applyToAll" className="text-xs text-slate-400 cursor-pointer">Apply choice to all existing images in this batch</label>
+                    </div>
+                </div>
+            ),
+            confirmText: 'Regenerate',
+            cancelText: 'Use Existing',
+            onConfirm: () => {
+                setConfirmModal(null);
+                onChoice('regenerate', applyToAll);
+            },
+            onCancel: () => {
+                setConfirmModal(null);
+                onChoice('use-existing', applyToAll);
+            }
+        });
+    };
+
+    const generateAndInsertImage = async (
+        prompt: ImagePrompt,
+        baseContent: string,
+        shouldSetHero: boolean = true,
+        existingImageUrl?: string
+    ): Promise<string | null> => {
+        console.log(`🚀 [generateAndInsertImage] Processing: "${prompt.sectionTitle}" (isHero: ${prompt.isHero}) ${existingImageUrl ? '[USING EXISTING]' : ''}`);
         setProcessingIds(prev => new Set(prev).add(prompt.id));
         setError(null);
         try {
-            let finalPromptText = prompt.prompt;
+            let compressedUrl = existingImageUrl || '';
 
-            // Find and apply specific preset styles if assigned
-            const pId = prompt.presetId;
-            if (pId) {
-                const preset = allPresets.find(p => p.id === pId);
-                if (preset) {
-                    const styleParts = Object.values(preset.styleOptions || {}).filter(v => !!v);
-                    if (styleParts.length > 0) {
-                        finalPromptText = `${prompt.prompt}, style: ${styleParts.join(', ')}`;
+            if (!compressedUrl) {
+                let finalPromptText = prompt.prompt;
+
+                // Find and apply specific preset styles if assigned
+                const pId = prompt.presetId;
+                if (pId) {
+                    const preset = allPresets.find(p => p.id === pId);
+                    if (preset) {
+                        const styleParts = Object.values(preset.styleOptions || {}).filter(v => !!v);
+                        if (styleParts.length > 0) {
+                            finalPromptText = `${prompt.prompt}, style: ${styleParts.join(', ')}`;
+                        }
                     }
                 }
-            }
 
-            // Append layout instructions if present (from local article config)
-            if (layoutConfig.instructions && layoutConfig.instructions.trim()) {
-                finalPromptText = `${finalPromptText}. Guidance: ${layoutConfig.instructions.trim()}`;
-            }
+                // Append layout instructions if present (from local article config)
+                if (layoutConfig.instructions && layoutConfig.instructions.trim()) {
+                    finalPromptText = `${finalPromptText}. Guidance: ${layoutConfig.instructions.trim()}`;
+                }
 
-            const result = await generateImage(finalPromptText, settings);
-            if (result.error) {
-                setError(result.error);
-                return null;
-            }
-            if (result.imageUrl) {
-                const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
+                const result = await generateImage(finalPromptText, settings);
+                if (result.error) {
+                    setError(result.error);
+                    return null;
+                }
 
-                // Get article title for tagging
-                const article = articles.find(a => a.id === articleId);
-                const articleTitle = article?.topic || 'Unknown Article';
+                if (result.imageUrl) {
+                    compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
 
-                await addMedia({
-                    name: `Section-${prompt.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
-                    type: 'image/jpeg',
-                    url: compressedUrl,
-                    createdAt: Date.now(),
-                    size: Math.round((compressedUrl.length * 3) / 4),
-                    tags: [
-                        `Article: ${articleId} - ${articleTitle}`,
-                        'CustomPromptUser'
-                    ],
-                    mediaPrompt: finalPromptText,
-                    usedIn: [articleId]
-                });
-                // Check if this is a hero image prompt
-                const isHeroImage = !!prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image';
-
-                // Only set hero image if shouldSetHero is true AND it is a hero prompt
-                if (shouldSetHero && isHeroImage) {
+                    // Get article title for tagging
                     const article = articles.find(a => a.id === articleId);
-                    const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-                    if (!hasHero) {
-                        await updateArticle(articleId, { heroImage: compressedUrl });
-                    }
-                }
+                    const articleTitle = article?.topic || 'Unknown Article';
 
-                // If it IS a hero image, we generally do NOT want it in the body content 
-                // because it's already displayed as the article banner.
-                if (isHeroImage) {
-                    console.log(`✨ [generateAndInsertImage] Skipping body insertion for Hero image: "${prompt.sectionTitle}"`);
-                    await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
-                    return baseContent; // Return unchanged content
-                }
-
-                console.log(`📝 [generateAndInsertImage] Inserting into body: "${prompt.sectionTitle}"`);
-                const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
-                const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
-                let newContent = baseContent;
-                if (headerIndex >= 0) {
-                    newContent = baseContent.slice(0, headerIndex) + imageMarkdown + baseContent.slice(headerIndex);
+                    await addMedia({
+                        name: `Section-${prompt.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        url: compressedUrl,
+                        createdAt: Date.now(),
+                        size: Math.round((compressedUrl.length * 3) / 4),
+                        tags: [
+                            `Article: ${articleId} - ${articleTitle}`,
+                            'CustomPromptUser'
+                        ],
+                        mediaPrompt: finalPromptText,
+                        usedIn: [articleId]
+                    });
                 } else {
-                    // Handles both -1 (not found) and -2 (explicit bottom)
-                    newContent = baseContent + imageMarkdown;
+                    return null;
                 }
-                await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
-                return newContent;
             }
-            return null;
+
+            // SHARED INSERTION LOGIC
+            const isHeroImage = !!prompt.isHero || prompt.sectionTitle.toLowerCase() === 'hero image';
+
+            if (shouldSetHero && isHeroImage) {
+                const article = articles.find(a => a.id === articleId);
+                const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
+                if (!hasHero) {
+                    await updateArticle(articleId, { heroImage: compressedUrl });
+                }
+            }
+
+            if (isHeroImage) {
+                console.log(`✨ [generateAndInsertImage] Skipping body insertion for Hero image: "${prompt.sectionTitle}"`);
+                await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
+                return baseContent;
+            }
+
+            console.log(`📝 [generateAndInsertImage] Inserting into body: "${prompt.sectionTitle}"`);
+            const headerIndex = findHeaderIndex(prompt.sectionTitle, baseContent);
+            const imageMarkdown = `\n![${prompt.sectionTitle}](${compressedUrl})\n\n`;
+            let newContent = baseContent;
+            if (headerIndex >= 0) {
+                newContent = baseContent.slice(0, headerIndex) + imageMarkdown + baseContent.slice(headerIndex);
+            } else {
+                newContent = baseContent + imageMarkdown;
+            }
+            await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
+            return newContent;
         } catch (err) {
             setError(`Failed to generate image with NanoBanana: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
@@ -1016,101 +1162,17 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                 </button>
                                 <button
                                     onClick={async () => {
-                                        setIsProcessing(true);
                                         const selected = filteredPrompts.filter(p => selectedIds.has(p.id));
-                                        setGenerationProgress({ current: 0, total: selected.length, message: 'Starting parallel generation...' });
+                                        const withExisting = selected.filter(p => !!p.imageUrl);
 
-                                        // 1. Parallel Generation Stage
-                                        const results: ({ compressedUrl: string, promptId: string } | null)[] = [];
-                                        let completed = 0;
-
-                                        await Promise.all(selected.map(async (p) => {
-                                            const res = await generateImageOnly(p);
-                                            completed++;
-                                            setGenerationProgress(prev => prev ? {
-                                                ...prev,
-                                                current: completed,
-                                                message: `Generated ${completed} of ${selected.length} images...`
-                                            } : null);
-                                            results.push(res);
-                                        }));
-
-                                        setGenerationProgress(prev => prev ? { ...prev, message: 'Inserting into article...' } : null);
-
-                                        // 2. Sequential Insertion Stage (to preserve order)
-                                        let currentContent = content;
-
-                                        // Detect if we are clustering at the top or bottom
-                                        // We check the first non-hero prompt's target
-                                        const firstBodyPrompt = selected.find(p => !p.isHero && p.sectionTitle.toLowerCase() !== 'hero image');
-                                        const targetIndex = firstBodyPrompt ? findHeaderIndex(firstBodyPrompt.sectionTitle, currentContent) : 0;
-
-                                        // For TOP placement (index 0), we reverse the list so that images 1, 2, 3
-                                        // result in [1, 2, 3] top-down after being pushed to index 0.
-                                        // For BOTTOM placement (-2 or -1), we use the ORIGINAL order
-                                        // so that images 1, 2, 3 results in [..., 1, 2, 3] at the end.
-                                        const shouldReverse = targetIndex === 0;
-
-                                        console.log(`📦 [Bulk Insertion] Target: ${targetIndex}, Reversed: ${shouldReverse}`);
-                                        const processedList = shouldReverse ? [...selected].reverse() : [...selected];
-
-                                        for (let i = 0; i < processedList.length; i++) {
-                                            const p = processedList[i];
-                                            const result = results.find(r => r?.promptId === p.id);
-                                            if (!result) continue;
-
-                                            const article = articles.find(a => a.id === articleId);
-                                            const hasHero = article?.heroImage && article.heroImage.trim() !== '' && article.heroImage !== 'null';
-
-                                            // 'shouldSetHero' flag logic
-                                            const originalIndex = selected.findIndex(item => item.id === p.id);
-                                            const shouldSetHero = originalIndex === 0 && !hasHero;
-
-                                            // Re-use logic from generateAndInsertImage but without the actual generation
-                                            const compressedUrl = result.compressedUrl;
-                                            const finalPromptText = (result as any).finalPromptText || p.prompt;
-
-                                            const articleTitle = article?.topic || 'Unknown Article';
-
-                                            await addMedia({
-                                                name: `Section-${p.sectionTitle.replace(/\s+/g, '-')}-${Date.now()}.jpg`,
-                                                type: 'image/jpeg',
-                                                url: compressedUrl,
-                                                createdAt: Date.now(),
-                                                size: Math.round((compressedUrl.length * 3) / 4),
-                                                tags: [
-                                                    `Article: ${articleId} - ${articleTitle}`,
-                                                    'CustomPromptUser'
-                                                ],
-                                                mediaPrompt: finalPromptText,
-                                                usedIn: [articleId]
+                                        if (withExisting.length > 0 && !batchChoice) {
+                                            showSmartChoiceModal(`${withExisting.length} Prompts`, (choice, applyToAll) => {
+                                                if (applyToAll) setBatchChoice(choice);
+                                                runBulkGeneration(selected, choice);
                                             });
-
-                                            const isHeroImage = !!p.isHero || p.sectionTitle.toLowerCase() === 'hero image';
-                                            if (shouldSetHero && isHeroImage) {
-                                                await updateArticle(articleId, { heroImage: compressedUrl });
-                                            }
-
-                                            if (isHeroImage) {
-                                                await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
-                                            } else {
-                                                const headerIndex = findHeaderIndex(p.sectionTitle, currentContent);
-                                                const imageMarkdown = `\n![${p.sectionTitle}](${compressedUrl})\n\n`;
-
-                                                if (headerIndex >= 0) {
-                                                    currentContent = currentContent.slice(0, headerIndex) + imageMarkdown + currentContent.slice(headerIndex);
-                                                } else {
-                                                    // This handles both -1 (not found) and -2 (explicit bottom)
-                                                    currentContent = currentContent + imageMarkdown;
-                                                }
-                                                await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
-                                            }
+                                        } else {
+                                            runBulkGeneration(selected, batchChoice);
                                         }
-
-                                        onUpdateContent(currentContent);
-                                        setGenerationProgress(null);
-                                        setIsProcessing(false);
-                                        setSelectedIds(new Set());
                                     }}
                                     disabled={isProcessing}
                                     className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg flex items-center gap-2"
@@ -1254,9 +1316,19 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                         {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
                                                         <button
                                                             onClick={async () => {
-                                                                const updatedContent = await generateAndInsertImage(prompt, content, true);
-                                                                if (updatedContent) {
-                                                                    onUpdateContent(updatedContent);
+                                                                if (prompt.imageUrl) {
+                                                                    showSmartChoiceModal(prompt.sectionTitle, async (choice) => {
+                                                                        const updatedContent = await generateAndInsertImage(
+                                                                            prompt,
+                                                                            content,
+                                                                            true,
+                                                                            choice === 'use-existing' ? prompt.imageUrl : undefined
+                                                                        );
+                                                                        if (updatedContent) onUpdateContent(updatedContent);
+                                                                    });
+                                                                } else {
+                                                                    const updatedContent = await generateAndInsertImage(prompt, content, true);
+                                                                    if (updatedContent) onUpdateContent(updatedContent);
                                                                 }
                                                             }}
                                                             disabled={isProcessingPrompt}
