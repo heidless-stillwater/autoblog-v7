@@ -1005,7 +1005,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             Quick Custom Generation
                         </div>
                         <div className="flex flex-col md:flex-row gap-3">
-                            <div className="flex-1 relative">
+                            <div className="md:w-2/3 w-full relative">
                                 <input
                                     type="text"
                                     value={genPromptCustom}
@@ -1014,7 +1014,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-4 pr-4 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-all hover:border-slate-700 font-medium"
                                 />
                             </div>
-                            <div className="flex items-center gap-2 min-w-[280px]">
+                            <div className="md:w-1/3 w-full flex items-center gap-2">
                                 <div className="relative flex-1">
                                     <select
                                         value={selectedLocation}
