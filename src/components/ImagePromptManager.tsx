@@ -73,6 +73,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [selectedLocation, setSelectedLocation] = useState('top');
     const [selectedDirection, setSelectedDirection] = useState<'above' | 'below'>('above');
     const [isQuickGenerating, setIsQuickGenerating] = useState(false);
+    const [shouldGenerateNow, setShouldGenerateNow] = useState(true);
 
     // Form states
     const [editTitle, setEditTitle] = useState('');
@@ -243,10 +244,120 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const findHeaderIndex = (sectionTitle: string, articleContent: string): number => {
+        console.log('🔍 Finding header for section:', sectionTitle);
+
+        const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const lowerTitle = sectionTitle.toLowerCase();
+
+        // Special case for hero image or top-of-article sections
+        const topMarkers = ['hero image', 'hero', 'introduction', 'intro', 'top', 'start', 'beginning'];
+        if (topMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
+            console.log('✅ Top-of-article section detected, inserting at start');
+            return 0;
+        }
+
+        // Special case for bottom-of-article sections
+        const bottomMarkers = ['conclusion', 'bottom', 'end', 'footer'];
+        if (bottomMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
+            console.log('✅ Bottom-of-article section detected, inserting at end');
+            return -2; // Special code for "absolute bottom" to distinguish from "not found"
+        }
+
+        // Strategy 1: Exact match
+        const escapedTitle = escapeRegExp(sectionTitle);
+        const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
+        const exactMatch = articleContent.match(exactRegex);
+        if (exactMatch && exactMatch.index !== undefined) {
+            console.log('✅ Exact match found at index:', exactMatch.index);
+            return exactMatch.index;
+        }
+
+        // Strategy 2: Partial match
+        const partialRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
+        const partialMatch = articleContent.match(partialRegex);
+        if (partialMatch && partialMatch.index !== undefined) {
+            console.log('✅ Partial match found at index:', partialMatch.index);
+            return partialMatch.index;
+        }
+
+        // Strategy 3: Sanitized fuzzy match
+        const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sanitizedTitle = sanitize(sectionTitle);
+        const lines = articleContent.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('#')) {
+                const headerText = line.replace(/^#+\s+/, '');
+                const sanitizedLine = sanitize(headerText);
+
+                // Check if either contains the other (more lenient matching)
+                if (sanitizedLine.includes(sanitizedTitle) || sanitizedTitle.includes(sanitizedLine)) {
+                    let currentPos = 0;
+                    for (let j = 0; j < i; j++) {
+                        currentPos += lines[j].length + 1;
+                    }
+                    console.log('✅ Fuzzy match found:', headerText, 'at index:', currentPos);
+                    return currentPos;
+                }
+            }
+        }
+
+        // Log all available headers for debugging
+        const allHeaders = articleContent.match(/^#+\s+.+$/gm);
+        console.warn('❌ Header not found for section:', sectionTitle);
+        console.log('📋 Available headers in article:', allHeaders);
+
+        return -1;
+    };
+
+    const extractHeaders = (articleContent: string) => {
+        const lines = articleContent.split('\n');
+        const headers: { text: string; level: number }[] = [];
+        lines.forEach(line => {
+            const match = line.match(/^(#{1,3})\s+(.+)$/);
+            if (match) {
+                headers.push({
+                    level: match[1].length,
+                    text: match[2].trim()
+                });
+            }
+        });
+        return headers;
+    };
+
     const allPrompts = imagePrompts.filter(p => p.articleId === articleId);
+
+    const getPromptPosition = (p: ImagePrompt): number => {
+        if (p.isHero || p.sectionTitle.toLowerCase() === 'hero image') return -100;
+
+        let sectionTitle = p.sectionTitle;
+        // Strip prefixes added by Quick Gen
+        if (sectionTitle.startsWith('Custom (')) {
+            const match = sectionTitle.match(/\((.+)\)/);
+            if (match) sectionTitle = match[1];
+        } else if (sectionTitle.startsWith('Custom: ')) {
+            sectionTitle = sectionTitle.replace('Custom: ', '');
+        }
+
+        if (sectionTitle === 'top') return -50;
+        if (sectionTitle === 'bottom') return content.length + 1000;
+
+        const idx = findHeaderIndex(sectionTitle, content);
+        if (idx === -2) return content.length + 500; // bottom markers
+        if (idx === -1) return content.length + 2000; // not found, put at end
+        return idx;
+    };
+
     const filteredPrompts = allPrompts
         .filter(p => !allPrompts.some(other => other.sectionTitle === p.sectionTitle && (other.version || 1) > (p.version || 1)))
-        .sort((a, b) => a.createdAt - b.createdAt);
+        .sort((a, b) => {
+            const posA = getPromptPosition(a);
+            const posB = getPromptPosition(b);
+            if (posA !== posB) return posA - posB;
+            return a.createdAt - b.createdAt;
+        });
 
     const handleGenerate = async () => {
         if (filteredPrompts.length > 0) {
@@ -455,88 +566,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         }
     };
 
-    const findHeaderIndex = (sectionTitle: string, articleContent: string): number => {
-        console.log('🔍 Finding header for section:', sectionTitle);
 
-        const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const lowerTitle = sectionTitle.toLowerCase();
-
-        // Special case for hero image or top-of-article sections
-        const topMarkers = ['hero image', 'hero', 'introduction', 'intro', 'top', 'start', 'beginning'];
-        if (topMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
-            console.log('✅ Top-of-article section detected, inserting at start');
-            return 0;
-        }
-
-        // Special case for bottom-of-article sections
-        const bottomMarkers = ['conclusion', 'bottom', 'end', 'footer'];
-        if (bottomMarkers.some(marker => lowerTitle === marker || lowerTitle.includes(marker))) {
-            console.log('✅ Bottom-of-article section detected, inserting at end');
-            return -2; // Special code for "absolute bottom" to distinguish from "not found"
-        }
-
-        // Strategy 1: Exact match
-        const escapedTitle = escapeRegExp(sectionTitle);
-        const exactRegex = new RegExp(`^#+\\s+${escapedTitle}\\s*$`, 'im');
-        const exactMatch = articleContent.match(exactRegex);
-        if (exactMatch && exactMatch.index !== undefined) {
-            console.log('✅ Exact match found at index:', exactMatch.index);
-            return exactMatch.index;
-        }
-
-        // Strategy 2: Partial match
-        const partialRegex = new RegExp(`^#+\\s+.*${escapedTitle}.*`, 'im');
-        const partialMatch = articleContent.match(partialRegex);
-        if (partialMatch && partialMatch.index !== undefined) {
-            console.log('✅ Partial match found at index:', partialMatch.index);
-            return partialMatch.index;
-        }
-
-        // Strategy 3: Sanitized fuzzy match
-        const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const sanitizedTitle = sanitize(sectionTitle);
-        const lines = articleContent.split('\n');
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith('#')) {
-                const headerText = line.replace(/^#+\s+/, '');
-                const sanitizedLine = sanitize(headerText);
-
-                // Check if either contains the other (more lenient matching)
-                if (sanitizedLine.includes(sanitizedTitle) || sanitizedTitle.includes(sanitizedLine)) {
-                    let currentPos = 0;
-                    for (let j = 0; j < i; j++) {
-                        currentPos += lines[j].length + 1;
-                    }
-                    console.log('✅ Fuzzy match found:', headerText, 'at index:', currentPos);
-                    return currentPos;
-                }
-            }
-        }
-
-        // Log all available headers for debugging
-        const allHeaders = articleContent.match(/^#+\s+.+$/gm);
-        console.warn('❌ Header not found for section:', sectionTitle);
-        console.log('📋 Available headers in article:', allHeaders);
-
-        return -1;
-    };
-
-    const extractHeaders = (articleContent: string) => {
-        const lines = articleContent.split('\n');
-        const headers: { text: string; level: number }[] = [];
-        lines.forEach(line => {
-            const match = line.match(/^(#{1,3})\s+(.+)$/);
-            if (match) {
-                headers.push({
-                    level: match[1].length,
-                    text: match[2].trim()
-                });
-            }
-        });
-        return headers;
-    };
 
     const handleQuickGenerate = async () => {
         if (!genPromptCustom || !content) return;
@@ -544,73 +574,85 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         setError(null);
 
         try {
-            const result = await generateImage(genPromptCustom, settings);
-            if (result.error) {
-                setError(result.error);
-                return;
-            }
-
-            if (result.imageUrl) {
-                const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
-
-                // Get article title for tagging
-                const article = articles.find(a => a.id === articleId);
-                const articleTitle = article?.topic || 'Unknown Article';
-
-                await addMedia({
-                    name: `QuickGen-${selectedLocation.slice(0, 10)}-${Date.now()}.jpg`,
-                    type: 'image/jpeg',
-                    url: compressedUrl,
-                    createdAt: Date.now(),
-                    size: Math.round((compressedUrl.length * 3) / 4),
-                    tags: [
-                        `Article: ${articleId} - ${articleTitle}`,
-                        'QuickGen'
-                    ],
-                    mediaPrompt: genPromptCustom,
-                    usedIn: [articleId]
-                });
-
-                const imageMarkdown = `\n![Custom Image](${compressedUrl})\n\n`;
-                let newContent = content;
-                let insertionIndex = 0;
-
-                if (selectedLocation === 'top') {
-                    if (selectedDirection === 'above') {
-                        insertionIndex = 0;
-                    } else {
-                        // Find end of first line
-                        const firstNewline = content.indexOf('\n');
-                        insertionIndex = firstNewline === -1 ? content.length : firstNewline + 1;
-                    }
-                } else if (selectedLocation === 'bottom') {
-                    if (selectedDirection === 'above') {
-                        // Find start of last line
-                        const lastNewline = content.lastIndexOf('\n', content.length - 2);
-                        insertionIndex = lastNewline === -1 ? 0 : lastNewline + 1;
-                    } else {
-                        insertionIndex = content.length;
-                    }
-                } else {
-                    const headerIndex = findHeaderIndex(selectedLocation, content);
-                    if (headerIndex >= 0) {
-                        if (selectedDirection === 'above') {
-                            insertionIndex = headerIndex;
-                        } else {
-                            // Find end of header line
-                            const nextNewline = content.indexOf('\n', headerIndex);
-                            insertionIndex = nextNewline === -1 ? content.length : nextNewline + 1;
-                        }
-                    } else {
-                        insertionIndex = content.length;
-                    }
+            if (shouldGenerateNow) {
+                const result = await generateImage(genPromptCustom, settings);
+                if (result.error) {
+                    setError(result.error);
+                    setIsQuickGenerating(false);
+                    return;
                 }
 
-                newContent = content.slice(0, insertionIndex) + imageMarkdown + content.slice(insertionIndex);
+                if (result.imageUrl) {
+                    const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
 
-                onUpdateContent(newContent);
+                    const article = articles.find(a => a.id === articleId);
+                    const articleTitle = article?.topic || 'Unknown Article';
 
-                // Add to prompt list for tracking and thumbnail display
+                    await addMedia({
+                        name: `QuickGen-${selectedLocation.slice(0, 10)}-${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        url: compressedUrl,
+                        createdAt: Date.now(),
+                        size: Math.round((compressedUrl.length * 3) / 4),
+                        tags: [
+                            `Article: ${articleId} - ${articleTitle}`,
+                            'QuickGen'
+                        ],
+                        mediaPrompt: genPromptCustom,
+                        usedIn: [articleId]
+                    });
+
+                    const imageMarkdown = `\n![Custom Image](${compressedUrl})\n\n`;
+                    let newContent = content;
+                    let insertionIndex = 0;
+
+                    if (selectedLocation === 'top') {
+                        if (selectedDirection === 'above') {
+                            insertionIndex = 0;
+                        } else {
+                            const firstNewline = content.indexOf('\n');
+                            insertionIndex = firstNewline === -1 ? content.length : firstNewline + 1;
+                        }
+                    } else if (selectedLocation === 'bottom') {
+                        if (selectedDirection === 'above') {
+                            const lastNewline = content.lastIndexOf('\n', content.length - 2);
+                            insertionIndex = lastNewline === -1 ? 0 : lastNewline + 1;
+                        } else {
+                            insertionIndex = content.length;
+                        }
+                    } else {
+                        const headerIndex = findHeaderIndex(selectedLocation, content);
+                        if (headerIndex >= 0) {
+                            if (selectedDirection === 'above') {
+                                insertionIndex = headerIndex;
+                            } else {
+                                const nextNewline = content.indexOf('\n', headerIndex);
+                                insertionIndex = nextNewline === -1 ? content.length : nextNewline + 1;
+                            }
+                        } else {
+                            insertionIndex = content.length;
+                        }
+                    }
+
+                    newContent = content.slice(0, insertionIndex) + imageMarkdown + content.slice(insertionIndex);
+                    onUpdateContent(newContent);
+
+                    await addImagePrompt({
+                        articleId,
+                        topic,
+                        sectionTitle: selectedLocation === 'top' || selectedLocation === 'bottom'
+                            ? `Custom (${selectedLocation})`
+                            : `Custom: ${selectedLocation}`,
+                        prompt: genPromptCustom,
+                        imageUrl: compressedUrl,
+                        isImageInserted: true,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        version: 1
+                    });
+                }
+            } else {
+                // Just add to prompt list
                 await addImagePrompt({
                     articleId,
                     topic,
@@ -618,18 +660,17 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         ? `Custom (${selectedLocation})`
                         : `Custom: ${selectedLocation}`,
                     prompt: genPromptCustom,
-                    imageUrl: compressedUrl,
-                    isImageInserted: true,
+                    isImageInserted: false,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
                     version: 1
                 });
-
-                setGenPromptCustom('');
-                setError(null);
             }
+
+            setGenPromptCustom('');
+            setError(null);
         } catch (err) {
-            setError(`Failed to generate custom image: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            setError(`Failed to handle custom prompt: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
         } finally {
             setIsQuickGenerating(false);
@@ -1005,16 +1046,34 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             Quick Custom Generation
                         </div>
                         <div className="flex flex-col md:flex-row gap-3">
-                            <div className="md:w-2/3 w-full relative">
-                                <input
-                                    type="text"
-                                    value={genPromptCustom}
-                                    onChange={(e) => setGenPromptCustom(e.target.value)}
-                                    placeholder="Enter a custom prompt for this article..."
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-4 pr-4 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-all hover:border-slate-700 font-medium"
-                                />
+                            <div className="md:w-2/3 w-full space-y-3">
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={genPromptCustom}
+                                        onChange={(e) => setGenPromptCustom(e.target.value)}
+                                        placeholder="Enter a custom prompt for this article..."
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-4 pr-4 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-all hover:border-slate-700 font-medium"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShouldGenerateNow(!shouldGenerateNow)}
+                                        className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-300 transition-colors cursor-pointer group"
+                                    >
+                                        <div className={clsx(
+                                            "w-4 h-4 rounded border flex items-center justify-center transition-all",
+                                            shouldGenerateNow
+                                                ? "bg-indigo-500 border-indigo-400 text-white"
+                                                : "bg-slate-900 border-slate-700 text-transparent group-hover:border-slate-600"
+                                        )}>
+                                            <Sparkles size={10} />
+                                        </div>
+                                        Generate Image Now
+                                    </button>
+                                </div>
                             </div>
-                            <div className="md:w-1/3 w-full flex items-center gap-2">
+                            <div className="md:w-1/3 w-full flex items-center gap-2 self-start">
                                 <div className="relative flex-1">
                                     <select
                                         value={selectedLocation}
@@ -1069,8 +1128,8 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                     disabled={isQuickGenerating || !genPromptCustom.trim()}
                                     className="btn-primary py-2 px-4 shadow-lg shadow-indigo-500/10 flex items-center gap-2 whitespace-nowrap min-w-[124px] justify-center"
                                 >
-                                    {isQuickGenerating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                                    <span>{isQuickGenerating ? 'Generating...' : 'Quick Gen'}</span>
+                                    {isQuickGenerating ? <Loader2 size={16} className="animate-spin" /> : (shouldGenerateNow ? <Plus size={16} /> : <Save size={16} />)}
+                                    <span>{isQuickGenerating ? 'Generating...' : (shouldGenerateNow ? 'Quick Gen' : 'Save Prompt')}</span>
                                 </button>
                             </div>
                         </div>
