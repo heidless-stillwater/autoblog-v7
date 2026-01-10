@@ -1,19 +1,37 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '../store';
-import { Search, X, Image as ImageIcon, Check, Tag } from 'lucide-react';
+import { Search, X, Image as ImageIcon, Check, Tag, ArrowUp, ArrowDown, ChevronDown, Target } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { MediaItem } from '../types';
 
 interface MediaSelectorModalProps {
-    onSelect: (mediaItem: MediaItem) => void;
+    onSelect: (mediaItem: MediaItem, location: string, direction: 'above' | 'below') => void;
     onClose: () => void;
+    content: string;
 }
 
-const MediaSelectorModal = ({ onSelect, onClose }: MediaSelectorModalProps) => {
+const MediaSelectorModal = ({ onSelect, onClose, content }: MediaSelectorModalProps) => {
     const { media, mediaTags, updateMedia } = useStore();
     const [search, setSearch] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [newItemTag, setNewItemTag] = useState<{ itemId: string; isOpen: boolean }>({ itemId: '', isOpen: false });
+    const [selectedLocation, setSelectedLocation] = useState('cursor');
+    const [selectedDirection, setSelectedDirection] = useState<'above' | 'below'>('below');
+
+    const headers = useMemo(() => {
+        const lines = content.split('\n');
+        const h: { text: string; level: number }[] = [];
+        lines.forEach(line => {
+            const match = line.match(/^(#{1,3})\s+(.+)$/);
+            if (match) {
+                h.push({
+                    level: match[1].length,
+                    text: match[2].trim()
+                });
+            }
+        });
+        return h;
+    }, [content]);
 
     const toggleItemTag = async (itemId: string, tag: string) => {
         const item = media.find(m => m.id === itemId);
@@ -39,7 +57,7 @@ const MediaSelectorModal = ({ onSelect, onClose }: MediaSelectorModalProps) => {
     const handleSelect = () => {
         const item = media.find(m => m.id === selectedId);
         if (item) {
-            onSelect(item);
+            onSelect(item, selectedLocation, selectedDirection);
         }
     };
 
@@ -61,17 +79,75 @@ const MediaSelectorModal = ({ onSelect, onClose }: MediaSelectorModalProps) => {
                 </div>
 
                 {/* Toolbar */}
-                <div className="p-4 border-b border-slate-800 bg-slate-900/50">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search images..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                            autoFocus
-                        />
+                <div className="p-4 border-b border-slate-800 bg-slate-900/50 space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4 items-start">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search images..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:w-64">
+                                <select
+                                    value={selectedLocation}
+                                    onChange={(e) => setSelectedLocation(e.target.value)}
+                                    className="w-full appearance-none bg-slate-950 border border-slate-700 rounded-lg pl-10 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer font-medium hover:border-slate-600"
+                                >
+                                    <optgroup label="Selection">
+                                        <option value="cursor">Insert at Cursor</option>
+                                    </optgroup>
+                                    <optgroup label="Fixed Locations">
+                                        <option value="Hero Image">Hero Image</option>
+                                        <option value="Top of Article">Top of Article</option>
+                                        <option value="Bottom of Article">Bottom of Article</option>
+                                    </optgroup>
+                                    {headers.length > 0 && (
+                                        <optgroup label="Section Headers">
+                                            {headers.map((h, i) => (
+                                                <option key={i} value={h.text}>
+                                                    {'•'.repeat(h.level)} {h.text}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                </select>
+                                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                    <Target size={14} />
+                                </div>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                    <ChevronDown size={14} />
+                                </div>
+                            </div>
+
+                            <div className="flex bg-slate-950 border border-slate-700 rounded-lg p-1">
+                                <button
+                                    onClick={() => setSelectedDirection('above')}
+                                    className={clsx(
+                                        "p-1.5 rounded transition-all",
+                                        selectedDirection === 'above' ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-300"
+                                    )}
+                                    title="Position Above"
+                                >
+                                    <ArrowUp size={14} />
+                                </button>
+                                <button
+                                    onClick={() => setSelectedDirection('below')}
+                                    className={clsx(
+                                        "p-1.5 rounded transition-all",
+                                        selectedDirection === 'below' ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-300"
+                                    )}
+                                    title="Position Below"
+                                >
+                                    <ArrowDown size={14} />
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

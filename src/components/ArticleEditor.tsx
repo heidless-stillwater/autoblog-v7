@@ -558,9 +558,50 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         };
     };
 
-    const handleInsertMedia = (mediaItem: MediaItem) => {
+    const handleInsertMedia = (mediaItem: MediaItem, location: string, direction: 'above' | 'below' = 'below') => {
         setShowMediaSelector(false);
 
+        if (location === 'Hero Image') {
+            handleSetHero(mediaItem.url);
+            return;
+        }
+
+        if (location === 'Top of Article') {
+            const newContent = `![${mediaItem.name}](${mediaItem.url})\n\n` + localContent;
+            handleUpdateContent(newContent);
+            return;
+        }
+
+        if (location === 'Bottom of Article') {
+            const newContent = localContent.trim() + `\n\n![${mediaItem.name}](${mediaItem.url})`;
+            handleUpdateContent(newContent);
+            return;
+        }
+
+        if (location !== 'cursor') {
+            // Find specific header
+            const lines = localContent.split('\n');
+            let headerLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes(location) && lines[i].trim().startsWith('#')) {
+                    headerLineIndex = i;
+                    break;
+                }
+            }
+
+            if (headerLineIndex !== -1) {
+                const newLines = [...lines];
+                if (direction === 'above') {
+                    newLines.splice(headerLineIndex, 0, `![${mediaItem.name}](${mediaItem.url})`, '');
+                } else {
+                    newLines.splice(headerLineIndex + 1, 0, '', `![${mediaItem.name}](${mediaItem.url})`, '');
+                }
+                handleUpdateContent(newLines.join('\n'));
+                return;
+            }
+        }
+
+        // Default: Cursor-based insertion
         let targetBlockId = activeBlockRef.current?.id;
         let insertIndex = activeBlockRef.current?.start || 0;
 
@@ -571,9 +612,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                 targetBlockId = lastBlock.id;
                 insertIndex = lastBlock.content?.length || 0;
             } else {
-                // Determine logic if no suitable block found (e.g. append)
-                // For now, let's just append to the end of the document if we can't find a place
-                const newContent = localContent + `\n\n![${mediaItem.name}](${mediaItem.url})`;
+                const newContent = localContent.trim() + `\n\n![${mediaItem.name}](${mediaItem.url})`;
                 handleUpdateContent(newContent);
                 return;
             }
@@ -627,6 +666,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
     if (showMediaSelector) {
         return (
             <MediaSelectorModal
+                content={localContent}
                 onSelect={handleInsertMedia}
                 onClose={() => setShowMediaSelector(false)}
             />
