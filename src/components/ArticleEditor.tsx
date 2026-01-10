@@ -13,15 +13,21 @@ import {
     ChevronDown,
     Sparkles,
     Send,
-    Database
+    Database,
+    Trash2,
+    MoveUp,
+    MoveDown,
+    Image as ImageIcon,
+    Star,
+    RotateCw
 } from 'lucide-react';
 import ImagePromptManager from './ImagePromptManager';
 import { format } from 'date-fns';
 import ResearchSelector from './ResearchSelector';
 import type { Article, ArticleVersion, PerplexityPrompt, MediaItem } from '../types';
-import { Trash2, MoveUp, MoveDown, Image as ImageIcon, Star } from 'lucide-react';
 import MediaSelectorModal from './MediaSelectorModal';
 import ConfirmModal from './ConfirmModal';
+import { rotateImage } from '../utils/imageUtils';
 
 interface Block {
     id: string;
@@ -438,6 +444,42 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         }
     };
 
+    const handleRotateImage = async (blockId: string) => {
+        const block = blocks.find(b => b.id === blockId);
+        if (!block || block.type !== 'image' || !block.url) return;
+
+        try {
+            const rotatedUrl = await rotateImage(block.url, 90);
+            const newBlocks = blocks.map(b => b.id === blockId ? { ...b, url: rotatedUrl } : b);
+
+            // 1. Update blocks state with the SAME IDs (stable update)
+            setBlocks(newBlocks);
+
+            // 2. Update local content string (serialized from blocks)
+            const newMarkdown = serializeBlocksToMarkdown(newBlocks);
+            setLocalContent(newMarkdown);
+
+            // 3. Debounce store update (same logic as updateBlockContent)
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(async () => {
+                if (currentVersion) {
+                    try {
+                        await updateArticleVersion(article.id, currentVersion.id, { content: newMarkdown });
+                    } catch (error) {
+                        console.error('Failed to auto-save rotated image:', error);
+                    }
+                }
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to rotate image:', error);
+            setConfirmModal({
+                message: 'Failed to rotate image. Please try again.',
+                onConfirm: () => setConfirmModal(null),
+                showCancel: false
+            });
+        }
+    };
+
     const handleJumpToSection = (sectionTitle: string) => {
         const lowerTitle = sectionTitle.toLowerCase();
         console.log(`[JumpToSection] Target: "${sectionTitle}"`);
@@ -851,6 +893,13 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                                                 className="w-full h-auto max-h-[600px] object-contain"
                                             />
                                             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleRotateImage(block.id)}
+                                                    title="Rotate Clockwise"
+                                                    className="p-2 bg-indigo-500/80 backdrop-blur text-white rounded-lg border border-indigo-500/50 hover:bg-indigo-600 transition-colors"
+                                                >
+                                                    <RotateCw size={16} />
+                                                </button>
                                                 <button
                                                     onClick={() => handleSetHero(block.url!)}
                                                     title="Set as Hero Image"

@@ -50,3 +50,38 @@ export const compressImage = async (
         img.onerror = () => reject(new Error('Failed to load image for compression'));
     });
 };
+
+export const rotateImage = async (base64Url: string, degrees: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = base64Url;
+
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Could not get canvas context'));
+                return;
+            }
+
+            // Calculate new dimensions
+            const angle = (degrees * Math.PI) / 180;
+            const sin = Math.abs(Math.sin(angle));
+            const cos = Math.abs(Math.cos(angle));
+            const width = img.width * cos + img.height * sin;
+            const height = img.width * sin + img.height * cos;
+
+            canvas.width = width;
+            canvas.height = height;
+
+            // Rotate and draw
+            ctx.translate(width / 2, height / 2);
+            ctx.rotate(angle);
+            ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+            resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image for rotation'));
+    });
+};
