@@ -55,7 +55,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     } = useStore();
 
     const [isGenerating, setIsGenerating] = useState(false);
-    const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(true);
@@ -76,9 +75,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
     const [isQuickGenerating, setIsQuickGenerating] = useState(false);
 
     // Form states
-    const [newTitle, setNewTitle] = useState('');
-    const [newPrompt, setNewPrompt] = useState('');
-    const [newIsHero, setNewIsHero] = useState(false);
     const [editTitle, setEditTitle] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
     const [editIsHero, setEditIsHero] = useState(false);
@@ -374,30 +370,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
 
     const handleUpdatePresetForPrompt = async (promptId: string, pId: string) => {
         await updateImagePrompt(promptId, { presetId: pId });
-    };
-
-    const handleAddManual = async () => {
-        if (!newTitle || !newPrompt) return;
-        try {
-            await addImagePrompt({
-                articleId,
-                topic,
-                sectionTitle: newTitle,
-                prompt: newPrompt,
-                rationale: 'Manually added prompt',
-                isHero: newIsHero || newTitle.toLowerCase().includes('hero'), // Auto-detect or manual
-                isPromptInserted: false,
-                isImageInserted: false,
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            });
-            setNewTitle('');
-            setNewPrompt('');
-            setNewIsHero(false);
-            setIsAdding(false);
-        } catch (err) {
-            setError('Failed to add prompt.');
-        }
     };
 
     const handleStartEdit = (prompt: ImagePrompt) => {
@@ -964,13 +936,6 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                 <Target size={18} />
                                 <span>Article Config</span>
                             </button>
-                            <button
-                                onClick={() => setIsAdding(true)}
-                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors flex items-center gap-2 border border-slate-700"
-                            >
-                                <Plus size={18} />
-                                <span>Add Manual</span>
-                            </button>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1180,50 +1145,9 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                         </div>
                     )}
 
-                    {isAdding && (
-                        <div className="mb-6 p-6 bg-slate-800/30 border border-slate-700 rounded-2xl animate-in zoom-in-95 duration-200">
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="text-lg font-bold text-slate-200">New Image Prompt</h4>
-                                <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
-                            </div>
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Section Title</label>
-                                    <input
-                                        type="text"
-                                        value={newTitle}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            setNewTitle(val);
-                                            if (val.toLowerCase().includes('hero')) setNewIsHero(true);
-                                        }}
-                                        placeholder="e.g. Introduction..."
-                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Prompt Description</label>
-                                    <textarea value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)} placeholder="Describe the image..." rows={4} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:ring-1 focus:ring-indigo-500/50 resize-none" />
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => setNewIsHero(!newIsHero)}
-                                        className={clsx(
-                                            "flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-xs font-black uppercase tracking-widest",
-                                            newIsHero ? "bg-amber-500/20 border-amber-500 text-amber-500 shadow-lg shadow-amber-500/10" : "bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-500"
-                                        )}
-                                    >
-                                        <Star size={14} fill={newIsHero ? "currentColor" : "none"} />
-                                        Is Hero Prompt
-                                    </button>
-                                </div>
-                                <button onClick={handleAddManual} disabled={!newTitle || !newPrompt} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20">Save Manual Prompt</button>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="space-y-4">
-                        {filteredPrompts.length === 0 && !isAdding && (
+                        {filteredPrompts.length === 0 && (
                             <div className="text-center py-16 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
                                 <ImageIcon className="mx-auto text-slate-700 mb-4 opacity-50" size={48} />
                                 <p className="text-slate-400 font-medium">No image prompts yet.</p>
