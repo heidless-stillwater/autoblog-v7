@@ -607,6 +607,22 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 newContent = content.slice(0, insertionIndex) + imageMarkdown + content.slice(insertionIndex);
 
                 onUpdateContent(newContent);
+
+                // Add to prompt list for tracking and thumbnail display
+                await addImagePrompt({
+                    articleId,
+                    topic,
+                    sectionTitle: selectedLocation === 'top' || selectedLocation === 'bottom'
+                        ? `Custom (${selectedLocation})`
+                        : `Custom: ${selectedLocation}`,
+                    prompt: genPromptCustom,
+                    imageUrl: compressedUrl,
+                    isImageInserted: true,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    version: 1
+                });
+
                 setGenPromptCustom('');
                 setError(null);
             }
@@ -731,7 +747,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                 // because it's already displayed as the article banner.
                 if (isHeroImage) {
                     console.log(`✨ [generateAndInsertImage] Skipping body insertion for Hero image: "${prompt.sectionTitle}"`);
-                    await updateImagePrompt(prompt.id, { isImageInserted: true });
+                    await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
                     return baseContent; // Return unchanged content
                 }
 
@@ -745,7 +761,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     // Handles both -1 (not found) and -2 (explicit bottom)
                     newContent = baseContent + imageMarkdown;
                 }
-                await updateImagePrompt(prompt.id, { isImageInserted: true });
+                await updateImagePrompt(prompt.id, { isImageInserted: true, imageUrl: compressedUrl });
                 return newContent;
             }
             return null;
@@ -1076,7 +1092,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                             }
 
                                             if (isHeroImage) {
-                                                await updateImagePrompt(p.id, { isImageInserted: true });
+                                                await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
                                             } else {
                                                 const headerIndex = findHeaderIndex(p.sectionTitle, currentContent);
                                                 const imageMarkdown = `\n![${p.sectionTitle}](${compressedUrl})\n\n`;
@@ -1087,7 +1103,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                                     // This handles both -1 (not found) and -2 (explicit bottom)
                                                     currentContent = currentContent + imageMarkdown;
                                                 }
-                                                await updateImagePrompt(p.id, { isImageInserted: true });
+                                                await updateImagePrompt(p.id, { isImageInserted: true, imageUrl: compressedUrl });
                                             }
                                         }
 
@@ -1203,120 +1219,134 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                                             </div>
                                         </div>
                                     ) : (
-                                        <>
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={clsx("p-1.5 rounded-lg border transition-all shadow-sm", isSelected ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-800")}>
-                                                        <CheckSquare size={16} />
+                                        <div className="flex gap-4">
+                                            {/* Thumbnail Section */}
+                                            <div className="shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-slate-700/50 bg-slate-900 flex items-center justify-center shadow-inner group-hover:border-slate-600 transition-colors">
+                                                {prompt.imageUrl ? (
+                                                    <img src={prompt.imageUrl} alt={prompt.sectionTitle} className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-500" />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-1 opacity-20 group-hover:opacity-40 transition-opacity">
+                                                        <ImageIcon size={24} className="text-slate-400" />
+                                                        <span className="text-[8px] font-black uppercase tracking-tighter text-slate-500">Unset</span>
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                                                            {prompt.sectionTitle}
-                                                            {isHero && <span className="flex items-center gap-1 text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter"><Star size={8} className="fill-current" /> Hero</span>}
-                                                            {(prompt.version || 1) > 1 && <span className="text-[9px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full border border-slate-600 font-bold uppercase tracking-tighter">v{prompt.version}</span>}
-                                                            {prompt.isPromptInserted && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-tighter">P-Inserted</span>}
-                                                            {prompt.isImageInserted && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold uppercase tracking-tighter">I-Inserted</span>}
-                                                        </h4>
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                                    <button onClick={() => handleStartEdit(prompt)} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
-                                                    <button onClick={() => insertPromptAsQuote(prompt)} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Insert Prompt"><Copy size={16} /></button>
-                                                    {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
-                                                    <button
-                                                        onClick={async () => {
-                                                            const updatedContent = await generateAndInsertImage(prompt, content, true);
-                                                            if (updatedContent) {
-                                                                onUpdateContent(updatedContent);
-                                                            }
-                                                        }}
-                                                        disabled={isProcessingPrompt}
-                                                        className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50"
-                                                        title="Generate Image"
-                                                    >
-                                                        {isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                                                    </button>
-                                                    <button onClick={() => handleDelete(prompt.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={16} /></button>
-                                                </div>
+                                                )}
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                <div className="relative">
-                                                    <select
-                                                        value={activeLayoutPresetId || ''}
-                                                        onChange={(e) => handleLayoutPresetChange(e.target.value === 'custom' ? null : e.target.value)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
-                                                    >
-                                                        <option value="" disabled>Select Layout</option>
-                                                        {(settings.layoutPresets || []).map(p => (
-                                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                                        ))}
-                                                        <option value="custom">Custom</option>
-                                                    </select>
-                                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                                        <LayoutTemplate size={12} />
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={clsx("p-1.5 rounded-lg border transition-all shadow-sm", isSelected ? "bg-indigo-500 border-indigo-400 text-white" : "bg-slate-900 border-slate-700 text-slate-800")}>
+                                                            <CheckSquare size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                                                {prompt.sectionTitle}
+                                                                {isHero && <span className="flex items-center gap-1 text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter"><Star size={8} className="fill-current" /> Hero</span>}
+                                                                {(prompt.version || 1) > 1 && <span className="text-[9px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full border border-slate-600 font-bold uppercase tracking-tighter">v{prompt.version}</span>}
+                                                                {prompt.isPromptInserted && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold uppercase tracking-tighter">P-Inserted</span>}
+                                                                {prompt.isImageInserted && <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/20 font-bold uppercase tracking-tighter">I-Inserted</span>}
+                                                            </h4>
+                                                        </div>
                                                     </div>
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                                        <ChevronDown size={10} />
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                        <button onClick={() => handleStartEdit(prompt)} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-colors"><Edit2 size={16} /></button>
+                                                        <button onClick={() => insertPromptAsQuote(prompt)} className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Insert Prompt"><Copy size={16} /></button>
+                                                        {onJumpToSection && <button onClick={() => onJumpToSection(prompt.sectionTitle)} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Jump to Section"><Target size={16} /></button>}
+                                                        <button
+                                                            onClick={async () => {
+                                                                const updatedContent = await generateAndInsertImage(prompt, content, true);
+                                                                if (updatedContent) {
+                                                                    onUpdateContent(updatedContent);
+                                                                }
+                                                            }}
+                                                            disabled={isProcessingPrompt}
+                                                            className="p-2 text-slate-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-lg transition-colors disabled:opacity-50"
+                                                            title="Generate Image"
+                                                        >
+                                                            {isProcessingPrompt ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                                        </button>
+                                                        <button onClick={() => handleDelete(prompt.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete"><Trash2 size={16} /></button>
                                                     </div>
                                                 </div>
-
-                                                <div className="relative">
-                                                    <select
-                                                        value={prompt.presetId || ''}
-                                                        onChange={(e) => handleUpdatePresetForPrompt(prompt.id, e.target.value)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
-                                                    >
-                                                        <option value="">No Style Preset</option>
-                                                        <optgroup label="Standard Styles">
-                                                            {STANDARD_PRESETS.map(p => (
+                                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                    <div className="relative">
+                                                        <select
+                                                            value={activeLayoutPresetId || ''}
+                                                            onChange={(e) => handleLayoutPresetChange(e.target.value === 'custom' ? null : e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
+                                                        >
+                                                            <option value="" disabled>Select Layout</option>
+                                                            {(settings.layoutPresets || []).map(p => (
                                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                                             ))}
-                                                        </optgroup>
-                                                        {(settings.promptPresets || []).length > 0 && (
-                                                            <optgroup label="My Presets">
-                                                                {(settings.promptPresets || []).map(p => (
+                                                            <option value="custom">Custom</option>
+                                                        </select>
+                                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                            <LayoutTemplate size={12} />
+                                                        </div>
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                            <ChevronDown size={10} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="relative">
+                                                        <select
+                                                            value={prompt.presetId || ''}
+                                                            onChange={(e) => handleUpdatePresetForPrompt(prompt.id, e.target.value)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="appearance-none bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-8 py-1 text-[10px] font-bold text-slate-400 hover:text-indigo-300 hover:border-indigo-500/30 transition-all outline-none"
+                                                        >
+                                                            <option value="">No Style Preset</option>
+                                                            <optgroup label="Standard Styles">
+                                                                {STANDARD_PRESETS.map(p => (
                                                                     <option key={p.id} value={p.id}>{p.name}</option>
                                                                 ))}
                                                             </optgroup>
-                                                        )}
-                                                    </select>
-                                                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                                        <Sparkles size={12} />
-                                                    </div>
-                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                                                        <ChevronDown size={10} />
+                                                            {(settings.promptPresets || []).length > 0 && (
+                                                                <optgroup label="My Presets">
+                                                                    {(settings.promptPresets || []).map(p => (
+                                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                                    ))}
+                                                                </optgroup>
+                                                            )}
+                                                        </select>
+                                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                            <Sparkles size={12} />
+                                                        </div>
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                            <ChevronDown size={10} />
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700/50 pl-4 py-1">"{prompt.prompt}"</p>
+                                                {isHero && prompt.heroReasoning && (
+                                                    <div className="mt-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-3">
+                                                        <p className="text-[9px] font-black text-amber-500/50 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                            <Sparkles size={10} />
+                                                            Hero Gestalt Reasoning
+                                                        </p>
+                                                        <p className="text-xs text-amber-200/70 leading-relaxed italic">
+                                                            {prompt.heroReasoning}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {(prompt.version || 1) > 1 && (
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setViewingHistoryTitle(prompt.sectionTitle);
+                                                            }}
+                                                            className="text-[9px] font-black text-slate-500 hover:text-indigo-400 uppercase tracking-widest flex items-center gap-1 transition-colors"
+                                                        >
+                                                            <Copy size={10} />
+                                                            View Version History
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700/50 pl-4 py-1">"{prompt.prompt}"</p>
-                                            {isHero && prompt.heroReasoning && (
-                                                <div className="mt-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-3">
-                                                    <p className="text-[9px] font-black text-amber-500/50 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                                        <Sparkles size={10} />
-                                                        Hero Gestalt Reasoning
-                                                    </p>
-                                                    <p className="text-xs text-amber-200/70 leading-relaxed italic">
-                                                        {prompt.heroReasoning}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {(prompt.version || 1) > 1 && (
-                                                <div className="mt-2 flex items-center gap-2">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setViewingHistoryTitle(prompt.sectionTitle);
-                                                        }}
-                                                        className="text-[9px] font-black text-slate-500 hover:text-indigo-400 uppercase tracking-widest flex items-center gap-1 transition-colors"
-                                                    >
-                                                        <Copy size={10} />
-                                                        View Version History
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </>
+                                        </div>
                                     )}
                                 </div>
                             );
@@ -1382,6 +1412,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     showCancel={false}
                 />
             )}
+
             {confirmModal && (
                 <ConfirmModal
                     message={confirmModal.message}
@@ -1392,7 +1423,7 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                     showCancel={confirmModal.showCancel}
                 />
             )}
-        </div >
+        </div>
     );
 };
 

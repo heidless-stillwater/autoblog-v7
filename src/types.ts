@@ -160,6 +160,7 @@ export interface ImagePrompt {
     previousVersionId?: string;
     heroReasoning?: string; // Analysis of why this visual represents the article theme
     presetId?: string; // ID of the preset applied to this prompt
+    imageUrl?: string; // URL of the generated image thumbnail
 }
 
 export interface User {
