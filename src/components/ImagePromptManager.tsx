@@ -19,7 +19,9 @@ import {
     LayoutTemplate,
     Plus,
     Loader2,
-    RotateCcw
+    RotateCcw,
+    ArrowUp,
+    ArrowDown
 } from 'lucide-react';
 
 import PromptConfigModal from './PromptConfigModal';
@@ -66,6 +68,12 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         total: number,
         message: string
     } | null>(null);
+
+    // Quick Generate States
+    const [genPromptCustom, setGenPromptCustom] = useState('');
+    const [selectedLocation, setSelectedLocation] = useState('top');
+    const [selectedDirection, setSelectedDirection] = useState<'above' | 'below'>('above');
+    const [isQuickGenerating, setIsQuickGenerating] = useState(false);
 
     // Form states
     const [newTitle, setNewTitle] = useState('');
@@ -541,6 +549,103 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
         return -1;
     };
 
+    const extractHeaders = (articleContent: string) => {
+        const lines = articleContent.split('\n');
+        const headers: { text: string; level: number }[] = [];
+        lines.forEach(line => {
+            const match = line.match(/^(#{1,3})\s+(.+)$/);
+            if (match) {
+                headers.push({
+                    level: match[1].length,
+                    text: match[2].trim()
+                });
+            }
+        });
+        return headers;
+    };
+
+    const handleQuickGenerate = async () => {
+        if (!genPromptCustom || !content) return;
+        setIsQuickGenerating(true);
+        setError(null);
+
+        try {
+            const result = await generateImage(genPromptCustom, settings);
+            if (result.error) {
+                setError(result.error);
+                return;
+            }
+
+            if (result.imageUrl) {
+                const compressedUrl = await compressImage(result.imageUrl, 700 * 1024, 1024, 0.7);
+
+                // Get article title for tagging
+                const article = articles.find(a => a.id === articleId);
+                const articleTitle = article?.topic || 'Unknown Article';
+
+                await addMedia({
+                    name: `QuickGen-${selectedLocation.slice(0, 10)}-${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    url: compressedUrl,
+                    createdAt: Date.now(),
+                    size: Math.round((compressedUrl.length * 3) / 4),
+                    tags: [
+                        `Article: ${articleId} - ${articleTitle}`,
+                        'QuickGen'
+                    ],
+                    mediaPrompt: genPromptCustom,
+                    usedIn: [articleId]
+                });
+
+                const imageMarkdown = `\n![Custom Image](${compressedUrl})\n\n`;
+                let newContent = content;
+                let insertionIndex = 0;
+
+                if (selectedLocation === 'top') {
+                    if (selectedDirection === 'above') {
+                        insertionIndex = 0;
+                    } else {
+                        // Find end of first line
+                        const firstNewline = content.indexOf('\n');
+                        insertionIndex = firstNewline === -1 ? content.length : firstNewline + 1;
+                    }
+                } else if (selectedLocation === 'bottom') {
+                    if (selectedDirection === 'above') {
+                        // Find start of last line
+                        const lastNewline = content.lastIndexOf('\n', content.length - 2);
+                        insertionIndex = lastNewline === -1 ? 0 : lastNewline + 1;
+                    } else {
+                        insertionIndex = content.length;
+                    }
+                } else {
+                    const headerIndex = findHeaderIndex(selectedLocation, content);
+                    if (headerIndex >= 0) {
+                        if (selectedDirection === 'above') {
+                            insertionIndex = headerIndex;
+                        } else {
+                            // Find end of header line
+                            const nextNewline = content.indexOf('\n', headerIndex);
+                            insertionIndex = nextNewline === -1 ? content.length : nextNewline + 1;
+                        }
+                    } else {
+                        insertionIndex = content.length;
+                    }
+                }
+
+                newContent = content.slice(0, insertionIndex) + imageMarkdown + content.slice(insertionIndex);
+
+                onUpdateContent(newContent);
+                setGenPromptCustom('');
+                setError(null);
+            }
+        } catch (err) {
+            setError(`Failed to generate custom image: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            console.error(err);
+        } finally {
+            setIsQuickGenerating(false);
+        }
+    };
+
     const insertPromptAsQuote = async (prompt: ImagePrompt) => {
         const headerIndex = findHeaderIndex(prompt.sectionTitle, content);
         const quote = `\n> **AI Image Prompt:** ${prompt.prompt}\n\n`;
@@ -758,6 +863,84 @@ const ImagePromptManager = ({ articleId, topic, content, onUpdateContent, onJump
                             <div className="text-sm">{error}</div>
                         </div>
                     )}
+
+                    {/* Quick Generate Bar */}
+                    <div className="mt-6 p-4 bg-slate-900/50 border border-slate-800 rounded-xl space-y-4">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            <Sparkles size={12} className="text-indigo-400" />
+                            Quick Custom Generation
+                        </div>
+                        <div className="flex flex-col md:flex-row gap-3">
+                            <div className="flex-1 relative">
+                                <input
+                                    type="text"
+                                    value={genPromptCustom}
+                                    onChange={(e) => setGenPromptCustom(e.target.value)}
+                                    placeholder="Enter a custom prompt for this article..."
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-4 pr-4 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-all hover:border-slate-700 font-medium"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 min-w-[280px]">
+                                <div className="relative flex-1">
+                                    <select
+                                        value={selectedLocation}
+                                        onChange={(e) => setSelectedLocation(e.target.value)}
+                                        className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-10 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all cursor-pointer font-medium hover:border-slate-700"
+                                    >
+                                        <optgroup label="Fixed Locations">
+                                            <option value="top">Top of Article</option>
+                                            <option value="bottom">Bottom of Article</option>
+                                        </optgroup>
+                                        {content && (
+                                            <optgroup label="Section Headers">
+                                                {extractHeaders(content).map((h, idx) => (
+                                                    <option key={`${h.text}-${idx}`} value={h.text}>
+                                                        {'•'.repeat(h.level)} {h.text}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                    </select>
+                                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <Target size={14} />
+                                    </div>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                        <ChevronDown size={14} />
+                                    </div>
+                                </div>
+                                <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-1">
+                                    <button
+                                        onClick={() => setSelectedDirection('above')}
+                                        className={clsx(
+                                            "p-1.5 rounded transition-all",
+                                            selectedDirection === 'above' ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-300"
+                                        )}
+                                        title="Position Above"
+                                    >
+                                        <ArrowUp size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedDirection('below')}
+                                        className={clsx(
+                                            "p-1.5 rounded transition-all",
+                                            selectedDirection === 'below' ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-300"
+                                        )}
+                                        title="Position Below"
+                                    >
+                                        <ArrowDown size={14} />
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={handleQuickGenerate}
+                                    disabled={isQuickGenerating || !genPromptCustom.trim()}
+                                    className="btn-primary py-2 px-4 shadow-lg shadow-indigo-500/10 flex items-center gap-2 whitespace-nowrap min-w-[124px] justify-center"
+                                >
+                                    {isQuickGenerating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    <span>{isQuickGenerating ? 'Generating...' : 'Quick Gen'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="mt-6 flex flex-wrap items-center justify-between gap-4 mb-2">
                         <div className="flex flex-wrap gap-2">
