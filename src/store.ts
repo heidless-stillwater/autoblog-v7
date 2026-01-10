@@ -830,6 +830,13 @@ export const useStore = create<AppState>()((set, get) => ({
         set({ isLoading: true });
         try {
             const id = await imagePromptsService.create(user.uid, prompt);
+
+            // Avoid duplicates if a fetch happened in the meantime
+            if (get().imagePrompts.some(p => p.id === id)) {
+                set({ isLoading: false });
+                return;
+            }
+
             const newPrompt = { ...prompt, id };
             set((state) => ({
                 imagePrompts: [newPrompt, ...state.imagePrompts],

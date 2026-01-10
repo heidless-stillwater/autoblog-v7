@@ -52,7 +52,8 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         getResearchByTopic,
         addResearch,
         updateArticleVersion,
-        syncHeroImages
+        syncHeroImages,
+        addImagePrompt
     } = useStore();
 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -558,23 +559,60 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         };
     };
 
+    // Lock ref to prevent double-insertion from modal race conditions
+    const isInsertingMediaRef = useRef(false);
+
+    // Reset lock when modal opens
+    useEffect(() => {
+        if (showMediaSelector) {
+            isInsertingMediaRef.current = false;
+        }
+    }, [showMediaSelector]);
+
     const handleInsertMedia = (mediaItem: MediaItem, location: string, direction: 'above' | 'below' = 'below') => {
+        // Prevent double invocation
+        if (isInsertingMediaRef.current) return;
+        isInsertingMediaRef.current = true;
+
         setShowMediaSelector(false);
+
+        const syncWithPrompts = () => {
+            const newPrompt = {
+                articleId: article.id,
+                topic: article.topic,
+                sectionTitle: location === 'cursor' ? 'Manual Selection' : location,
+                prompt: mediaItem.mediaPrompt || 'Inserted from Media Library',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                isPromptInserted: true,
+                isImageInserted: true,
+                isHero: location === 'Hero Image',
+                imageUrl: mediaItem.url,
+                version: 1
+            };
+
+            addImagePrompt(newPrompt).catch(err => {
+                console.error('[ArticleEditor] Failed to sync image prompt:', err);
+            });
+        };
 
         if (location === 'Hero Image') {
             handleSetHero(mediaItem.url);
+            syncWithPrompts();
             return;
         }
 
         if (location === 'Top of Article') {
             const newContent = `![${mediaItem.name}](${mediaItem.url})\n\n` + localContent;
             handleUpdateContent(newContent);
+            syncWithPrompts();
             return;
         }
 
         if (location === 'Bottom of Article') {
             const newContent = localContent.trim() + `\n\n![${mediaItem.name}](${mediaItem.url})`;
             handleUpdateContent(newContent);
+            syncWithPrompts();
             return;
         }
 
@@ -597,6 +635,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
                     newLines.splice(headerLineIndex + 1, 0, '', `![${mediaItem.name}](${mediaItem.url})`, '');
                 }
                 handleUpdateContent(newLines.join('\n'));
+                syncWithPrompts();
                 return;
             }
         }
@@ -614,6 +653,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
             } else {
                 const newContent = localContent.trim() + `\n\n![${mediaItem.name}](${mediaItem.url})`;
                 handleUpdateContent(newContent);
+                syncWithPrompts();
                 return;
             }
         }
@@ -638,6 +678,7 @@ const ArticleEditor = ({ article }: ArticleEditorProps) => {
         // This is important because the inserted markdown needs to be split into its own Image block
         const newMarkdown = serializeBlocksToMarkdown(newBlocks);
         handleUpdateContent(newMarkdown);
+        syncWithPrompts();
     };
 
     // Clean up timeout on unmount
