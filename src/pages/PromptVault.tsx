@@ -54,6 +54,7 @@ const PromptVault: React.FC = () => {
 
     const filteredSets = (promptSets || []).filter(s =>
         s?.name?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+        s?.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
         s?.description?.toLowerCase()?.includes(searchQuery.toLowerCase())
     );
 
@@ -203,7 +204,7 @@ const PromptVault: React.FC = () => {
                                         onClick={() => setSelectedSet(s)}
                                         className="text-lg font-bold text-white hover:text-indigo-400 hover:underline decoration-indigo-500/50 underline-offset-4 transition-all uppercase tracking-tight text-left block w-full truncate"
                                     >
-                                        {s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
+                                        {s?.title || s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
                                     </button>
                                     <p className="text-sm text-slate-400 line-clamp-2">
                                         {s.description || 'No description provided.'}
@@ -254,7 +255,7 @@ const PromptVault: React.FC = () => {
                         <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 backdrop-blur-xl sticky top-0 z-10">
                             <div>
                                 <h2 className="text-2xl font-bold text-white uppercase tracking-tight">
-                                    {selectedSet.name || `Set: ${selectedSet.id.substring(0, 8)}...`}
+                                    {selectedSet.title || selectedSet.name || `Set: ${selectedSet.id.substring(0, 8)}...`}
                                 </h2>
                                 <p className="text-slate-400 text-sm mt-1">{selectedSet.versions?.length || 0} iterations in this collection</p>
                             </div>

@@ -11,6 +11,7 @@ export interface PromptVaultVersion {
 export interface PromptVaultSet {
     id: string;
     name: string;
+    title?: string;
     description?: string;
     userId: string;
     createdAt: string | number;
