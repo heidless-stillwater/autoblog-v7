@@ -1,0 +1,227 @@
+import React, { useEffect, useState } from 'react';
+import { promptVaultService } from '../services/promptVault';
+import type { PromptVaultVersion, PromptVaultSet } from '../services/promptVault';
+import { useAuth } from '../contexts/AuthContext';
+import {
+    RefreshCcw,
+    Layers,
+    History,
+    ExternalLink,
+    AlertCircle,
+    Search,
+    Image as ImageIcon
+} from 'lucide-react';
+import clsx from 'clsx';
+
+const PromptVault: React.FC = () => {
+    const { user } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [versions, setVersions] = useState<PromptVaultVersion[]>([]);
+    const [promptSets, setPromptSets] = useState<PromptVaultSet[]>([]);
+    const [activeTab, setActiveTab] = useState<'iterations' | 'collections'>('iterations');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const fetchData = async () => {
+        if (!user) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const [versionsData, setsData] = await Promise.all([
+                promptVaultService.getUserVersions(user.uid),
+                promptVaultService.getUserPromptSets(user.uid)
+            ]);
+            setVersions(versionsData);
+            setPromptSets(setsData);
+        } catch (err) {
+            console.error('Error fetching vault data:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load vault data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [user]);
+
+    const filteredVersions = (versions || []).filter(v =>
+        v?.promptText?.toLowerCase()?.includes(searchQuery.toLowerCase())
+    );
+
+    const filteredSets = (promptSets || []).filter(s =>
+        s?.name?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
+        s?.description?.toLowerCase()?.includes(searchQuery.toLowerCase())
+    );
+
+    return (
+        <div className="space-y-8 animate-in fade-in duration-700">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-white tracking-tight">Image Prompt Vault</h1>
+                    <p className="text-slate-400 mt-1">Sync and manage your AI-generated iterations and collections from PromptVault.</p>
+                </div>
+                <button
+                    onClick={fetchData}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20"
+                >
+                    <RefreshCcw size={18} className={clsx(loading && "animate-spin")} />
+                    <span>Sync Now</span>
+                </button>
+            </div>
+
+            {/* Stats & Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 p-6 rounded-2xl">
+                    <div className="flex items-center gap-3 text-indigo-400 mb-2">
+                        <History size={20} />
+                        <span className="text-sm font-semibold uppercase tracking-wider">Total Iterations</span>
+                    </div>
+                    <div className="text-3xl font-bold text-white">{versions.length}</div>
+                </div>
+                <div className="bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 p-6 rounded-2xl">
+                    <div className="flex items-center gap-3 text-purple-400 mb-2">
+                        <Layers size={20} />
+                        <span className="text-sm font-semibold uppercase tracking-wider">Collections</span>
+                    </div>
+                    <div className="text-3xl font-bold text-white">{promptSets.length}</div>
+                </div>
+                <div className="bg-slate-800/40 backdrop-blur-xl border border-slate-700/50 p-6 rounded-2xl flex items-center">
+                    <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search prompts or collections..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-slate-800">
+                <button
+                    onClick={() => setActiveTab('iterations')}
+                    className={clsx(
+                        "px-6 py-3 text-sm font-medium transition-all relative",
+                        activeTab === 'iterations' ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+                    )}
+                >
+                    Iterations
+                    {activeTab === 'iterations' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />}
+                </button>
+                <button
+                    onClick={() => setActiveTab('collections')}
+                    className={clsx(
+                        "px-6 py-3 text-sm font-medium transition-all relative",
+                        activeTab === 'collections' ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+                    )}
+                >
+                    Collections
+                    {activeTab === 'collections' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" />}
+                </button>
+            </div>
+
+            {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                    <AlertCircle size={20} />
+                    <span>{error}</span>
+                </div>
+            )}
+
+            {/* Content Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeTab === 'iterations' ? (
+                    filteredVersions.map((v) => (
+                        <div key={v.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all duration-300">
+                            <div className="aspect-video relative overflow-hidden bg-slate-900">
+                                {v.imageUrl ? (
+                                    <img
+                                        src={v.imageUrl}
+                                        alt={v.promptText}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                        <ImageIcon size={48} />
+                                    </div>
+                                )}
+                                <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase tracking-wider border border-white/10">
+                                    V{v.versionNumber}
+                                </div>
+                            </div>
+                            <div className="p-4 space-y-3">
+                                <p className="text-sm text-slate-300 line-clamp-3 font-medium">
+                                    {v.promptText}
+                                </p>
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
+                                    <span className="text-xs text-slate-500">
+                                        {new Date(v.createdAt).toLocaleDateString()}
+                                    </span>
+                                    <button className="text-indigo-400 hover:text-indigo-300 transition-colors">
+                                        <ExternalLink size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    filteredSets.map((s) => (
+                        <div key={s.id} className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400">
+                                    <Layers size={24} />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900/50 px-2 py-1 rounded">
+                                    {s.versions?.length || 0} Versions
+                                </span>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors uppercase tracking-tight">
+                                    {s.name}
+                                </h3>
+                                <p className="text-sm text-slate-400 mt-1 line-clamp-2">
+                                    {s.description || 'No description provided.'}
+                                </p>
+                            </div>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
+                                <span className="text-xs text-slate-500">
+                                    Created {new Date(s.createdAt).toLocaleDateString()}
+                                </span>
+                                <button className="px-3 py-1 bg-slate-700/50 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-md transition-all">
+                                    View Set
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+
+                {!loading && (activeTab === 'iterations' ? filteredVersions : filteredSets).length === 0 && (
+                    <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-500 space-y-4">
+                        <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center">
+                            <Layers size={40} className="text-slate-600" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-lg font-medium text-slate-400">No {activeTab} found</p>
+                            <p className="text-sm">Try syncing or adjusting your search query.</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+                    {[1, 2, 3, 4, 5, 6].map(i => (
+                        <div key={i} className="bg-slate-800/40 h-64 rounded-2xl border border-slate-700/50" />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default PromptVault;

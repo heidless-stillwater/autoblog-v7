@@ -9,7 +9,8 @@ import {
     LogOut,
     User,
     Sparkles,
-    ExternalLink
+    ExternalLink,
+    Layers
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store';
@@ -25,6 +26,7 @@ const Sidebar = () => {
         { to: '/admin/media', icon: ImageIcon, label: 'Media', end: false },
         { to: '/admin/articles', icon: FileText, label: 'Article Mgr', end: false },
         { to: '/admin/topics', icon: Sparkles, label: 'Topic Mgr', end: false },
+        { to: '/admin/prompt-vault', icon: Layers, label: 'Prompt Vault', end: false },
     ];
 
     const handleSignOut = async () => {

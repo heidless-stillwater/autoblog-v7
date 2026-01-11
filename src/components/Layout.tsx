@@ -4,7 +4,11 @@ import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
 
 
-const Layout = () => {
+interface LayoutProps {
+    children?: React.ReactNode;
+}
+
+const Layout = ({ children }: LayoutProps) => {
     // We'll implement the actual modal visibility logic next.
     // For now, we can structure the layout.
 
@@ -14,7 +18,7 @@ const Layout = () => {
 
             <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen scroll-smooth">
                 <div className="max-w-6xl mx-auto animate-fade-in">
-                    <Outlet />
+                    {children || <Outlet />}
                 </div>
             </main>
 

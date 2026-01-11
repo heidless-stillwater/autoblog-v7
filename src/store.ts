@@ -143,6 +143,8 @@ const defaultSettings: Settings = {
     layoutNumImages: 3,
     layoutIncludeHero: true,
     layoutInstructions: '* If hero image is to be used then ONLY show Hero image in the Hero section of the Article above the Title. Do not display the Hero anywher else. Do not display the title or Hero within the Article.\n* I want the images to be spread as evenly across the article. If in doubt then bias the placement to the top half of the article',
+    promptVaultApiKey: 'pk_live_SivqQp5ssy_0Mz_uBbAuJulTzuRyQSg_Fk424Y2KF-I',
+    promptVaultBaseUrl: 'https://imageprompt-v1-dev.web.app/api',
 };
 
 export const useStore = create<AppState>()((set, get) => ({

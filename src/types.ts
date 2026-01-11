@@ -80,6 +80,10 @@ export interface Settings {
     layoutNumImages?: number;
     layoutIncludeHero?: boolean;
     layoutInstructions?: string;
+
+    // PromptVault Configuration
+    promptVaultApiKey?: string;
+    promptVaultBaseUrl?: string;
 }
 
 export interface ArticleLayoutPreset {

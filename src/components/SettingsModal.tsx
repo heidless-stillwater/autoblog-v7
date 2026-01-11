@@ -284,6 +284,46 @@ const SettingsModal = () => {
                             />
                         </div>
                     </section>
+
+                    {/* PromptVault */}
+                    <section>
+                        <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 border-b border-indigo-500/10 pb-2">PromptVault</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">API Key</label>
+                                <input
+                                    type="password"
+                                    placeholder="pk_live_..."
+                                    value={localSettings.promptVaultApiKey || ''}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, promptVaultApiKey: e.target.value })}
+                                    className="input-field"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">API Base URL</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <select
+                                        value={localSettings.promptVaultBaseUrl || 'https://imageprompt-v1-dev.web.app/api'}
+                                        onChange={(e) => setLocalSettings({ ...localSettings, promptVaultBaseUrl: e.target.value })}
+                                        className="input-field appearance-none cursor-pointer"
+                                    >
+                                        <option value="https://imageprompt-v1-dev.web.app/api">Live API (Default)</option>
+                                        <option value="http://localhost:3000/api">Local API (Development)</option>
+                                    </select>
+                                    <input
+                                        type="text"
+                                        placeholder="Custom URL..."
+                                        value={localSettings.promptVaultBaseUrl || ''}
+                                        onChange={(e) => setLocalSettings({ ...localSettings, promptVaultBaseUrl: e.target.value })}
+                                        className="input-field text-xs bg-slate-800/50"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1 italic">
+                                    Tip: Use Local API if running the vault backend locally on port 3000.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <div className="mt-10 flex justify-end">
@@ -295,8 +335,8 @@ const SettingsModal = () => {
                         <span>Save Settings</span>
                     </button>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

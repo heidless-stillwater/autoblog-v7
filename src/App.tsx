@@ -11,6 +11,7 @@ import PostEditor from './pages/PostEditor';
 import Media from './pages/Media';
 import ArticleManager from './pages/ArticleManager';
 import TopicManager from './pages/TopicManager';
+import PromptVault from './pages/PromptVault';
 // import AutoBlog from './pages/AutoBlog'; // Deprecated
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -19,7 +20,7 @@ import FrontendLayout from './components/FrontendLayout';
 import FrontendBlogList from './pages/FrontendBlogList';
 import FrontendArticleView from './pages/FrontendArticleView';
 
-function AppContent() {
+export function AppContent() {
   const { settings, loadUserData, setUser, clearData } = useStore();
   const { user } = useAuth();
 
@@ -49,16 +50,6 @@ function AppContent() {
 
   return (
     <Routes>
-      {/* Public Routes */}
-      <Route element={<FrontendLayout />}>
-        <Route path="/" element={<FrontendBlogList />} />
-        <Route path="/article/:id" element={<FrontendArticleView />} />
-      </Route>
-
-      {/* Auth Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-
       {/* Admin Protected Routes */}
       <Route
         path="/admin"
@@ -78,11 +69,22 @@ function AppContent() {
         <Route path="articles" element={<ArticleManager />} />
         <Route path="articles/:id" element={<ArticleManager />} />
         <Route path="topics" element={<TopicManager />} />
+        <Route path="prompt-vault" element={<PromptVault />} />
 
         {/* Legacy Redirects */}
         <Route path="blog" element={<Navigate to="/admin/articles" replace />} />
         <Route path="blog/:id" element={<Navigate to="/admin/articles/:id" replace />} />
       </Route>
+
+      {/* Public Routes */}
+      <Route element={<FrontendLayout />}>
+        <Route path="/" element={<FrontendBlogList />} />
+        <Route path="/article/:id" element={<FrontendArticleView />} />
+      </Route>
+
+      {/* Auth Routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
 
       {/* Redirects */}
       <Route path="*" element={<Navigate to="/" replace />} />

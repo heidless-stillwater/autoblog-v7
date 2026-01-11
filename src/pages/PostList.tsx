@@ -132,7 +132,7 @@ const PostList = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h1 className="text-3xl font-bold text-white">Posts</h1>
-                <Link to="/posts/new" className="btn-primary flex items-center gap-2">
+                <Link to="/admin/posts/new" className="btn-primary flex items-center gap-2">
                     <Plus size={20} />
                     <span>New Post</span>
                 </Link>
@@ -270,7 +270,7 @@ const PostList = () => {
 
                             <div className="flex items-center gap-2 w-full md:w-auto justify-end pl-10 md:pl-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Link
-                                    to={`/posts/${post.id}`}
+                                    to={`/admin/posts/${post.id}`}
                                     className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
                                     title="Edit"
                                 >
