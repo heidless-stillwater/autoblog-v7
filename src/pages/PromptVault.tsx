@@ -9,7 +9,9 @@ import {
     ExternalLink,
     AlertCircle,
     Search,
-    Image as ImageIcon
+    Image as ImageIcon,
+    X,
+    Maximize2
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -21,6 +23,7 @@ const PromptVault: React.FC = () => {
     const [promptSets, setPromptSets] = useState<PromptVaultSet[]>([]);
     const [activeTab, setActiveTab] = useState<'iterations' | 'collections'>('iterations');
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedSet, setSelectedSet] = useState<PromptVaultSet | null>(null);
 
     const fetchData = async () => {
         if (!user) return;
@@ -31,8 +34,6 @@ const PromptVault: React.FC = () => {
                 promptVaultService.getUserVersions(user.uid),
                 promptVaultService.getUserPromptSets(user.uid)
             ]);
-            console.log('[PromptVault] Fetched Versions:', versionsData);
-            console.log('[PromptVault] Fetched PromptSets:', setsData);
             setVersions(versionsData);
             setPromptSets(setsData);
         } catch (err) {
@@ -172,34 +173,56 @@ const PromptVault: React.FC = () => {
                         </div>
                     ))
                 ) : (
-                    filteredSets.map((s) => (
-                        <div key={s.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400">
-                                    <Layers size={24} />
+                    filteredSets.map((s) => {
+                        const thumbnail = s.versions?.find(v => v.versionNumber === 1)?.imageUrl || s.versions?.[0]?.imageUrl;
+
+                        return (
+                            <div key={s.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all duration-300 flex flex-col">
+                                <div className="aspect-video relative overflow-hidden bg-slate-900 cursor-pointer" onClick={() => setSelectedSet(s)}>
+                                    {thumbnail ? (
+                                        <img
+                                            src={thumbnail}
+                                            alt={s.name}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                            <Layers size={48} />
+                                        </div>
+                                    )}
+                                    <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase tracking-wider border border-white/10 flex items-center gap-1">
+                                        <History size={10} />
+                                        {s.versions?.length || 0}
+                                    </div>
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <Maximize2 size={24} className="text-white" />
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900/50 px-2 py-1 rounded">
-                                    {s.versions?.length || 0} Versions
-                                </span>
+                                <div className="p-5 space-y-3 flex-1">
+                                    <button
+                                        onClick={() => setSelectedSet(s)}
+                                        className="text-lg font-bold text-white hover:text-purple-400 transition-colors uppercase tracking-tight text-left block w-full truncate"
+                                    >
+                                        {s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
+                                    </button>
+                                    <p className="text-sm text-slate-400 line-clamp-2">
+                                        {s.description || 'No description provided.'}
+                                    </p>
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
+                                        <span className="text-xs text-slate-500">
+                                            {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : 'N/A'}
+                                        </span>
+                                        <button
+                                            onClick={() => setSelectedSet(s)}
+                                            className="px-3 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-[10px] font-bold text-purple-400 uppercase tracking-widest rounded-md transition-all"
+                                        >
+                                            View Versions
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors uppercase tracking-tight">
-                                    {s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
-                                </h3>
-                                <p className="text-sm text-slate-400 mt-1 line-clamp-2">
-                                    {s.description || 'No description provided.'}
-                                </p>
-                            </div>
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
-                                <span className="text-xs text-slate-500">
-                                    Created {new Date(s.createdAt).toLocaleDateString()}
-                                </span>
-                                <button className="px-3 py-1 bg-slate-700/50 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-md transition-all">
-                                    View Set
-                                </button>
-                            </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
 
                 {!loading && (activeTab === 'iterations' ? filteredVersions : filteredSets).length === 0 && (
@@ -220,6 +243,67 @@ const PromptVault: React.FC = () => {
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <div key={i} className="bg-slate-800/40 h-64 rounded-2xl border border-slate-700/50" />
                     ))}
+                </div>
+            )}
+
+            {/* Version Modal */}
+            {selectedSet && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 backdrop-blur-xl sticky top-0 z-10">
+                            <div>
+                                <h2 className="text-2xl font-bold text-white uppercase tracking-tight">
+                                    {selectedSet.name || `Set: ${selectedSet.id.substring(0, 8)}...`}
+                                </h2>
+                                <p className="text-slate-400 text-sm mt-1">{selectedSet.versions?.length || 0} iterations in this collection</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedSet(null)}
+                                className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-all"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {(selectedSet.versions || []).sort((a, b) => (Number(b.versionNumber) - Number(a.versionNumber))).map((v) => (
+                                    <div key={v.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden hover:border-indigo-500/30 transition-all">
+                                        <div className="aspect-video relative overflow-hidden bg-slate-900">
+                                            {v.imageUrl ? (
+                                                <img src={v.imageUrl} alt={v.promptText} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                                    <ImageIcon size={48} />
+                                                </div>
+                                            )}
+                                            <div className="absolute top-3 left-3 px-2 py-1 bg-indigo-600 rounded text-[10px] font-bold text-white uppercase tracking-wider border border-white/10">
+                                                Version {v.versionNumber}
+                                            </div>
+                                            <a
+                                                href={v.imageUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute bottom-3 right-3 p-2 bg-black/50 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <ExternalLink size={16} />
+                                            </a>
+                                        </div>
+                                        <div className="p-4 bg-slate-900/50">
+                                            <p className="text-xs text-slate-300 line-clamp-4 font-medium italic leading-relaxed">
+                                                "{v.promptText}"
+                                            </p>
+                                            <div className="mt-3 text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                                                {new Date(v.createdAt).toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
