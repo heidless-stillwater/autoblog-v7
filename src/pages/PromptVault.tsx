@@ -31,6 +31,8 @@ const PromptVault: React.FC = () => {
                 promptVaultService.getUserVersions(user.uid),
                 promptVaultService.getUserPromptSets(user.uid)
             ]);
+            console.log('[PromptVault] Fetched Versions:', versionsData);
+            console.log('[PromptVault] Fetched PromptSets:', setsData);
             setVersions(versionsData);
             setPromptSets(setsData);
         } catch (err) {
@@ -156,7 +158,7 @@ const PromptVault: React.FC = () => {
                             </div>
                             <div className="p-4 space-y-3">
                                 <p className="text-sm text-slate-300 line-clamp-3 font-medium">
-                                    {v.promptText}
+                                    {v?.promptText || `Iteration #${v?.versionNumber || v?.id?.substring(0, 4)}`}
                                 </p>
                                 <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
                                     <span className="text-xs text-slate-500">
@@ -171,7 +173,7 @@ const PromptVault: React.FC = () => {
                     ))
                 ) : (
                     filteredSets.map((s) => (
-                        <div key={s.id} className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 space-y-4">
+                        <div key={s.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 space-y-4">
                             <div className="flex items-center justify-between">
                                 <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400">
                                     <Layers size={24} />
@@ -182,7 +184,7 @@ const PromptVault: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors uppercase tracking-tight">
-                                    {s.name}
+                                    {s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
                                 </h3>
                                 <p className="text-sm text-slate-400 mt-1 line-clamp-2">
                                     {s.description || 'No description provided.'}
