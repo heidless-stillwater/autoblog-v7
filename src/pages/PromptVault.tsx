@@ -201,7 +201,7 @@ const PromptVault: React.FC = () => {
                                 <div className="p-5 space-y-3 flex-1">
                                     <button
                                         onClick={() => setSelectedSet(s)}
-                                        className="text-lg font-bold text-white hover:text-purple-400 transition-colors uppercase tracking-tight text-left block w-full truncate"
+                                        className="text-lg font-bold text-white hover:text-indigo-400 hover:underline decoration-indigo-500/50 underline-offset-4 transition-all uppercase tracking-tight text-left block w-full truncate"
                                     >
                                         {s?.name || `Set: ${s?.id?.substring(0, 8)}...`}
                                     </button>
