@@ -84,7 +84,10 @@ export interface Settings {
     // PromptVault Configuration
     promptVaultApiKey?: string;
     promptVaultBaseUrl?: string;
+    promptVaultPermissionMode?: PromptVaultPermissionMode;
 }
+
+export type PromptVaultPermissionMode = 'always_ask' | 'always_ask_exceptions' | 'never_ask';
 
 export interface ArticleLayoutPreset {
     id: string;

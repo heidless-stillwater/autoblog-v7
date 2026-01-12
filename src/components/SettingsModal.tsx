@@ -177,6 +177,23 @@ const SettingsModal = () => {
                                     />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">API Permissions</label>
+                                <select
+                                    value={localSettings.promptVaultPermissionMode || 'always_ask'}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, promptVaultPermissionMode: e.target.value as any })}
+                                    className="input-field"
+                                >
+                                    <option value="always_ask">Always ask Permission</option>
+                                    <option value="always_ask_exceptions">Always ask with Exceptions</option>
+                                    <option value="never_ask">Never ask Permission</option>
+                                </select>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {localSettings.promptVaultPermissionMode === 'always_ask' && "You will be asked to connect each time."}
+                                    {localSettings.promptVaultPermissionMode === 'always_ask_exceptions' && "You will be asked, unless whitelisted (Placeholder)."}
+                                    {localSettings.promptVaultPermissionMode === 'never_ask' && "Connections are made automatically."}
+                                </p>
+                            </div>
                         </div>
                     </section>
 

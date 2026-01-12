@@ -24,8 +24,9 @@ import { useStore } from '../store';
 
 const PromptVault: React.FC = () => {
     const { user } = useAuth();
-    const { addMedia, media, updateMedia } = useStore();
-    const [loading, setLoading] = useState(true);
+    const { addMedia, media, updateMedia, settings } = useStore();
+    const [permissionGranted, setPermissionGranted] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [versions, setVersions] = useState<PromptVaultVersion[]>([]);
     const [promptSets, setPromptSets] = useState<PromptVaultSet[]>([]);
@@ -59,8 +60,23 @@ const PromptVault: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchData();
-    }, [user]);
+        // Initialize based on settings
+        if (settings.promptVaultPermissionMode === 'never_ask') {
+            setPermissionGranted(true);
+        } else {
+            setPermissionGranted(false);
+        }
+    }, [settings.promptVaultPermissionMode]);
+
+    useEffect(() => {
+        if (permissionGranted) {
+            fetchData();
+        }
+    }, [user, permissionGranted]);
+
+    const handleGrantPermission = () => {
+        setPermissionGranted(true);
+    };
 
     const filteredVersions = (versions || []).filter(v =>
         v?.promptText?.toLowerCase()?.includes(searchQuery.toLowerCase())
@@ -577,6 +593,35 @@ const PromptVault: React.FC = () => {
 
                         <div className="text-center text-xs text-slate-500">
                             {conflictQueue.length} conflict{conflictQueue.length > 1 ? 's' : ''} remaining
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {!permissionGranted && (
+                <div className="fixed inset-0 z-40 bg-slate-950 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg p-8 shadow-2xl text-center space-y-6">
+                        <div className="w-20 h-20 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto border border-indigo-500/20">
+                            <Layers size={40} className="text-indigo-500" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold text-white">Connect to Image Prompt Library</h2>
+                            <p className="text-slate-400">
+                                Access your hosted PromptVault collection. You need to explicitly grant permission to connect to the external API.
+                            </p>
+                        </div>
+
+                        <div className="pt-4">
+                            <button
+                                onClick={handleGrantPermission}
+                                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
+                            >
+                                <RefreshCw size={20} />
+                                <span>Connect & Sync</span>
+                            </button>
+                            <p className="text-xs text-slate-500 mt-4">
+                                You can configure connection permissions in Settings.
+                            </p>
                         </div>
                     </div>
                 </div>
