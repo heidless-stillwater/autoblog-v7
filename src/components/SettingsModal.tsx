@@ -177,23 +177,6 @@ const SettingsModal = () => {
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">PromptVault API Permissions</label>
-                                <select
-                                    value={localSettings.promptVaultPermissionMode || 'always_ask'}
-                                    onChange={(e) => setLocalSettings({ ...localSettings, promptVaultPermissionMode: e.target.value as any })}
-                                    className="input-field"
-                                >
-                                    <option value="always_ask">Always ask Permission</option>
-                                    <option value="always_ask_exceptions">Always ask with Exceptions</option>
-                                    <option value="never_ask">Never ask Permission</option>
-                                </select>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    {localSettings.promptVaultPermissionMode === 'always_ask' && "You will be asked to connect each time."}
-                                    {localSettings.promptVaultPermissionMode === 'always_ask_exceptions' && "You will be asked, unless whitelisted (Placeholder)."}
-                                    {localSettings.promptVaultPermissionMode === 'never_ask' && "Connections are made automatically."}
-                                </p>
-                            </div>
                         </div>
                     </section>
 
@@ -289,16 +272,18 @@ const SettingsModal = () => {
                     {/* Automation */}
                     <section>
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-700/50 pb-2">Automation</h3>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Queue Process Interval (minutes)</label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="60"
-                                value={localSettings.queueProcessInterval || 1}
-                                onChange={(e) => setLocalSettings({ ...localSettings, queueProcessInterval: parseInt(e.target.value) || 1 })}
-                                className="input-field"
-                            />
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Queue Process Interval (minutes)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="60"
+                                    value={localSettings.queueProcessInterval || 1}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, queueProcessInterval: parseInt(e.target.value) || 1 })}
+                                    className="input-field"
+                                />
+                            </div>
                         </div>
                     </section>
 
@@ -306,6 +291,23 @@ const SettingsModal = () => {
                     <section>
                         <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 border-b border-indigo-500/10 pb-2">PromptVault</h3>
                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">API Permissions</label>
+                                <select
+                                    value={localSettings.promptVaultPermissionMode || 'always_ask'}
+                                    onChange={(e) => setLocalSettings({ ...localSettings, promptVaultPermissionMode: e.target.value as any })}
+                                    className="input-field"
+                                >
+                                    <option value="always_ask">Always ask Permission</option>
+                                    <option value="always_ask_exceptions">Always ask with Exceptions</option>
+                                    <option value="never_ask">Never ask Permission</option>
+                                </select>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {localSettings.promptVaultPermissionMode === 'always_ask' && "You will be asked to connect each time."}
+                                    {localSettings.promptVaultPermissionMode === 'always_ask_exceptions' && "You will be asked, unless whitelisted (Placeholder)."}
+                                    {localSettings.promptVaultPermissionMode === 'never_ask' && "Connections are made automatically."}
+                                </p>
+                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-1">API Key</label>
                                 <input
@@ -345,7 +347,7 @@ const SettingsModal = () => {
 
                 {/* Build Information */}
                 <div className="mt-6 pt-4 border-t border-slate-800/50 text-[10px] text-slate-600 flex justify-between items-center italic">
-                    <span>Build: 2026.01.12.1145</span>
+                    <span>Build: 2026.01.12.1155</span>
                     <span>CORS Proxy: Active (Robust Matching)</span>
                 </div>
 
@@ -358,8 +360,8 @@ const SettingsModal = () => {
                         <span>Save Settings</span>
                     </button>
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 };
 
