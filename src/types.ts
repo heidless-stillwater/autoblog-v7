@@ -89,6 +89,12 @@ export interface Settings {
 
 export type PromptVaultPermissionMode = 'always_ask' | 'always_ask_exceptions' | 'never_ask';
 
+export interface PromptVaultSnapshot {
+    versions: any[]; // Using any[] to avoid circular deps or re-definitions if PromptVaultVersion isn't in types.ts
+    promptSets: any[];
+    lastUpdated: number;
+}
+
 export interface ArticleLayoutPreset {
     id: string;
     name: string;

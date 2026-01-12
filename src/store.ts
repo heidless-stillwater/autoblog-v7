@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost, TopicQueueSnapshot, GenHistory } from './types';
+import type { Post, MediaItem, Settings, Article, ArticleVersion, User, PerplexityPrompt, TopicSet, ImagePrompt, PublicPost, TopicQueueSnapshot, GenHistory, PromptVaultSnapshot } from './types';
 import { postsService, mediaService, settingsService, articlesService, topicSetsService, imagePromptsService, publicService, usersService, topicQueueService, genHistoryService, mediaTagsService } from './services/firestoreService';
 import { perplexityService } from './services/perplexityService';
 
@@ -15,6 +15,7 @@ interface AppState {
     mediaTags: string[];
     isLoading: boolean;
     isInitialized: boolean;
+    promptVaultSnapshot: PromptVaultSnapshot | null;
 
     // Public Content State
     publicContent: PublicPost[];
@@ -46,6 +47,10 @@ interface AppState {
 
     // Settings Actions
     updateSettings: (updates: Partial<Settings>) => Promise<void>;
+
+    // PromptVault Snapshot Actions
+    loadPromptVaultSnapshot: () => void;
+    setPromptVaultSnapshot: (snapshot: PromptVaultSnapshot) => void;
 
     // Loading Actions
     setLoading: (loading: boolean) => void;
@@ -163,6 +168,7 @@ export const useStore = create<AppState>()((set, get) => ({
     mediaTags: [],
     isLoading: false,
     isInitialized: false,
+    promptVaultSnapshot: null,
 
     // User Actions
     setUser: (user) => set({ user }),
@@ -460,6 +466,33 @@ export const useStore = create<AppState>()((set, get) => ({
             console.error('Error updating settings:', error);
             set({ isLoading: false });
             throw error;
+        }
+    },
+
+    loadPromptVaultSnapshot: () => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            const key = `promptVault_snapshot_${user.uid}`;
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                const snapshot = JSON.parse(stored);
+                set({ promptVaultSnapshot: snapshot });
+            }
+        } catch (error) {
+            console.error('Error loading PromptVault snapshot:', error);
+        }
+    },
+
+    setPromptVaultSnapshot: (snapshot) => {
+        const { user } = get();
+        if (!user) return;
+        try {
+            const key = `promptVault_snapshot_${user.uid}`;
+            localStorage.setItem(key, JSON.stringify(snapshot));
+            set({ promptVaultSnapshot: snapshot });
+        } catch (error) {
+            console.error('Error saving PromptVault snapshot:', error);
         }
     },
 

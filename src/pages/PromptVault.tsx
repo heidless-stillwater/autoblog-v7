@@ -24,7 +24,7 @@ import { useStore } from '../store';
 
 const PromptVault: React.FC = () => {
     const { user } = useAuth();
-    const { addMedia, media, updateMedia, settings } = useStore();
+    const { addMedia, media, updateMedia, settings, promptVaultSnapshot, loadPromptVaultSnapshot, setPromptVaultSnapshot } = useStore();
     const [permissionGranted, setPermissionGranted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -51,6 +51,13 @@ const PromptVault: React.FC = () => {
             ]);
             setVersions(versionsData);
             setPromptSets(setsData);
+
+            // Snapshot the data
+            setPromptVaultSnapshot({
+                versions: versionsData,
+                promptSets: setsData,
+                lastUpdated: Date.now()
+            });
         } catch (err) {
             console.error('Error fetching vault data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load vault data');
@@ -58,6 +65,14 @@ const PromptVault: React.FC = () => {
             setLoading(false);
         }
     };
+
+
+    useEffect(() => {
+        // Load snapshot when user is available (store handles user check)
+        if (user) {
+            loadPromptVaultSnapshot();
+        }
+    }, [user, loadPromptVaultSnapshot]);
 
     useEffect(() => {
         // Initialize based on settings
@@ -67,6 +82,15 @@ const PromptVault: React.FC = () => {
             setPermissionGranted(false);
         }
     }, [settings.promptVaultPermissionMode]);
+
+    useEffect(() => {
+        // If we have a snapshot and no current data, populate from snapshot
+        // This acts as "offline" mode or "instant load"
+        if (promptVaultSnapshot && versions.length === 0) {
+            setVersions(promptVaultSnapshot.versions);
+            setPromptSets(promptVaultSnapshot.promptSets);
+        }
+    }, [promptVaultSnapshot]);
 
     useEffect(() => {
         if (permissionGranted) {
