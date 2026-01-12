@@ -11,12 +11,20 @@ import {
     Search,
     Image as ImageIcon,
     X,
-    Maximize2
+    Maximize2,
+    Check,
+    Copy,
+    CheckCircle,
+    AlertTriangle,
+    RefreshCw,
+    SkipForward
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useStore } from '../store';
 
 const PromptVault: React.FC = () => {
     const { user } = useAuth();
+    const { addMedia, media, updateMedia } = useStore();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [versions, setVersions] = useState<PromptVaultVersion[]>([]);
@@ -24,6 +32,12 @@ const PromptVault: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'iterations' | 'collections'>('iterations');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedSet, setSelectedSet] = useState<PromptVaultSet | null>(null);
+    const [selectedVersionIds, setSelectedVersionIds] = useState<Set<string>>(new Set());
+    const [copyingIds, setCopyingIds] = useState<Set<string>>(new Set());
+
+    // Conflict Resolution State
+    const [conflictQueue, setConflictQueue] = useState<{ version: PromptVaultVersion, existingMediaId: string }[]>([]);
+    const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
 
     const fetchData = async () => {
         if (!user) return;
@@ -68,6 +82,135 @@ const PromptVault: React.FC = () => {
         return map;
     }, [promptSets]);
 
+    const handleToggleSelectOriginal = (id: string) => {
+        setSelectedVersionIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const processCopyQueue = async (
+        queue: { version: PromptVaultVersion, existingMediaId?: string, action?: 'replace' | 'skip' | 'add' }[]
+    ) => {
+        let processedCount = 0;
+
+        for (const item of queue) {
+            if (item.action === 'skip') continue;
+
+            const parentSet = versionToSetMap.get(item.version.id);
+            const title = parentSet?.title || parentSet?.name || 'Unknown Set';
+            const mediaName = `vault-${item.version.id.substring(0, 8)}.png`; // Consistent naming for detection for now
+
+            try {
+                if (item.action === 'replace' && item.existingMediaId) {
+                    await updateMedia(item.existingMediaId, {
+                        url: item.version.imageUrl,
+                        mediaPrompt: item.version.promptText,
+                        tags: ['ImagePromptLib', title],
+                        size: 0, // Reset size if tracked
+                        createdAt: Date.now()
+                    });
+                } else {
+                    // Default Add
+                    await addMedia({
+                        name: mediaName,
+                        type: 'image/jpeg',
+                        url: item.version.imageUrl,
+                        createdAt: Date.now(),
+                        size: 0,
+                        tags: ['ImagePromptLib', title],
+                        mediaPrompt: item.version.promptText
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to process copy item:', item.version.id, err);
+            }
+
+            processedCount++;
+            // setCopyProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        }
+    };
+
+    const handleCopy = async (specificVersion?: PromptVaultVersion) => {
+        const versionsToCopy = specificVersion
+            ? [specificVersion]
+            : versions.filter(v => selectedVersionIds.has(v.id));
+
+        if (versionsToCopy.length === 0) return;
+
+        setCopyingIds(specificVersion ? new Set([specificVersion.id]) : new Set(selectedVersionIds));
+        // setCopyProgress({ current: 0, total: versionsToCopy.length });
+
+        // Split into clean vs conflict
+        const newQueue: typeof conflictQueue = [];
+        const cleanQueue: typeof conflictQueue = [];
+
+        for (const v of versionsToCopy) {
+            // Simple duplicate check by "name" or maybe content hash in future. 
+            // For now using the predictable name scheme: `vault-{id_start}`
+            const expectedName = `vault-${v.id.substring(0, 8)}.png`;
+            const existing = media.find(m => m.name === expectedName);
+
+            if (existing) {
+                newQueue.push({ version: v, existingMediaId: existing.id });
+            } else {
+                cleanQueue.push({ version: v, existingMediaId: '' });
+            }
+        }
+
+        // Process clean items immediately
+        if (cleanQueue.length > 0) {
+            await processCopyQueue(cleanQueue.map(i => ({ ...i, action: 'add' })));
+        }
+
+        // Handle conflicts
+        if (newQueue.length > 0) {
+            setConflictQueue(newQueue);
+            setIsResolvingConflicts(true);
+        } else {
+            // Done
+            setTimeout(() => {
+                setCopyingIds(new Set());
+                setSelectedVersionIds(new Set());
+            }, 500);
+        }
+    };
+
+    const resolveConflict = async (action: 'replace' | 'skip', applyToAll: boolean) => {
+        if (conflictQueue.length === 0) return;
+
+        const current = conflictQueue[0];
+        const remaining = conflictQueue.slice(1);
+
+        // Process current
+        await processCopyQueue([{ ...current, action }]);
+
+        if (applyToAll) {
+            // Process all remaining with same action
+            await processCopyQueue(remaining.map(item => ({ ...item, action })));
+            setConflictQueue([]);
+            setIsResolvingConflicts(false);
+            setCopyingIds(new Set());
+            if (!selectedVersionIds.has(current.version.id)) {
+                // Was a single copy, minimal cleanup needed
+            } else {
+                setSelectedVersionIds(new Set());
+            }
+        } else {
+            // Next item
+            if (remaining.length > 0) {
+                setConflictQueue(remaining);
+            } else {
+                setConflictQueue([]);
+                setIsResolvingConflicts(false);
+                setCopyingIds(new Set());
+                if (selectedVersionIds.size > 0) setSelectedVersionIds(new Set());
+            }
+        }
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-700">
             {/* Header */}
@@ -76,14 +219,35 @@ const PromptVault: React.FC = () => {
                     <h1 className="text-3xl font-bold text-white tracking-tight">Image Prompt Vault</h1>
                     <p className="text-slate-400 mt-1">Sync and manage your AI-generated iterations and collections from PromptVault.</p>
                 </div>
-                <button
-                    onClick={fetchData}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20"
-                >
-                    <RefreshCcw size={18} className={clsx(loading && "animate-spin")} />
-                    <span>Sync Now</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    {selectedVersionIds.size > 0 && activeTab === 'iterations' && (
+                        <button
+                            onClick={() => handleCopy()}
+                            disabled={copyingIds.size > 0}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors animate-in fade-in slide-in-from-right-4 font-bold uppercase tracking-wide text-xs shadow-lg shadow-indigo-500/20"
+                        >
+                            {copyingIds.size > 0 ? (
+                                <>
+                                    <CheckCircle size={16} className="animate-pulse" />
+                                    <span>Copying...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Copy size={16} />
+                                    <span>Copy Selected ({selectedVersionIds.size})</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                    <button
+                        onClick={fetchData}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20"
+                    >
+                        <RefreshCcw size={18} className={clsx(loading && "animate-spin")} />
+                        <span>Sync Now</span>
+                    </button>
+                </div>
             </div>
 
             {/* Stats & Filters */}
@@ -151,7 +315,13 @@ const PromptVault: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeTab === 'iterations' ? (
                     filteredVersions.map((v) => (
-                        <div key={v.id} className="group bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all duration-300">
+                        <div
+                            key={v.id}
+                            onClick={() => handleToggleSelectOriginal(v.id)}
+                            className={clsx(
+                                "group bg-slate-800/40 border rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer relative",
+                                selectedVersionIds.has(v.id) ? "border-indigo-500 ring-1 ring-indigo-500/50" : "border-slate-700/50 hover:border-indigo-500/50"
+                            )}>
                             <div className="aspect-video relative overflow-hidden bg-slate-900">
                                 {v.imageUrl ? (
                                     <img
@@ -167,6 +337,14 @@ const PromptVault: React.FC = () => {
                                 <div className="absolute top-3 right-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase tracking-wider border border-white/10">
                                     V{v.versionNumber}
                                 </div>
+                                <div className={clsx(
+                                    "absolute top-3 left-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all bg-black/40 backdrop-blur-sm z-10",
+                                    selectedVersionIds.has(v.id)
+                                        ? "border-indigo-500 bg-indigo-600 text-white scale-100 opacity-100"
+                                        : "border-white/30 text-transparent scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 hover:border-white/60"
+                                )}>
+                                    <Check size={14} strokeWidth={4} />
+                                </div>
                             </div>
                             <div className="p-4 space-y-3">
                                 <div className="space-y-1">
@@ -181,9 +359,25 @@ const PromptVault: React.FC = () => {
                                     <span className="text-xs text-slate-500">
                                         {new Date(v.createdAt).toLocaleDateString()}
                                     </span>
-                                    <button className="text-indigo-400 hover:text-indigo-300 transition-colors">
-                                        <ExternalLink size={16} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCopy(v);
+                                            }}
+                                            className="text-slate-400 hover:text-indigo-400 transition-colors p-1"
+                                            title="Copy to Media"
+                                        >
+                                            {copyingIds.has(v.id) ? (
+                                                <CheckCircle size={16} className="animate-pulse text-indigo-500" />
+                                            ) : (
+                                                <Copy size={16} />
+                                            )}
+                                        </button>
+                                        <button className="text-indigo-400 hover:text-indigo-300 transition-colors">
+                                            <ExternalLink size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -318,6 +512,71 @@ const PromptVault: React.FC = () => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isResolvingConflicts && conflictQueue.length > 0 && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200 ring-1 ring-slate-700">
+                        <div className="flex items-center gap-4 text-amber-500">
+                            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                                <AlertTriangle size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Duplicate Check</h3>
+                                <p className="text-slate-400 text-sm">Target media already exists.</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 space-y-3">
+                            <div className="aspect-video relative rounded-lg overflow-hidden bg-black/50 border border-slate-700/50">
+                                <img
+                                    src={conflictQueue[0].version.imageUrl}
+                                    className="w-full h-full object-contain"
+                                    alt="Conflict Check"
+                                />
+                                <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs text-white font-mono border border-white/10">
+                                    New Version
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-500 font-mono text-center">
+                                ID: {conflictQueue[0].version.id}
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => resolveConflict('replace', false)}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+                            >
+                                <RefreshCw size={18} />
+                                <span>Replace</span>
+                            </button>
+                            <button
+                                onClick={() => resolveConflict('replace', true)}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-medium transition-colors border border-slate-600"
+                            >
+                                <span className="text-xs">Replace All</span>
+                            </button>
+
+                            <button
+                                onClick={() => resolveConflict('skip', false)}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors border border-slate-700"
+                            >
+                                <SkipForward size={18} />
+                                <span>Skip</span>
+                            </button>
+                            <button
+                                onClick={() => resolveConflict('skip', true)}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg font-medium transition-colors border border-slate-700"
+                            >
+                                <span className="text-xs">Skip All</span>
+                            </button>
+                        </div>
+
+                        <div className="text-center text-xs text-slate-500">
+                            {conflictQueue.length} conflict{conflictQueue.length > 1 ? 's' : ''} remaining
                         </div>
                     </div>
                 </div>
