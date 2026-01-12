@@ -54,9 +54,28 @@ exports.apiProxy = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
         }
         else if (req.path.startsWith("/api/gemini")) {
             pathRemaining = req.path.replace("/api/gemini", "");
-            // Handle Gemini query params (API key)
             const queryString = req.url.split('?')[1] || "";
             targetUrl = `https://generativelanguage.googleapis.com${pathRemaining}${queryString ? `?${queryString}` : ""}`;
+        }
+        else if (req.path.startsWith("/api/claude")) {
+            pathRemaining = req.path.replace("/api/claude", "");
+            targetUrl = `https://api.anthropic.com${pathRemaining}`;
+        }
+        else if (req.path.startsWith("/api/openai")) {
+            pathRemaining = req.path.replace("/api/openai", "");
+            targetUrl = `https://api.openai.com${pathRemaining}`;
+        }
+        else if (req.path.startsWith("/api/brave")) {
+            pathRemaining = req.path.replace("/api/brave", "");
+            targetUrl = `https://api.search.brave.com${pathRemaining}`;
+        }
+        else if (req.path.startsWith("/api/vault-local")) {
+            pathRemaining = req.path.replace("/api/vault-local", "");
+            targetUrl = `http://localhost:3000/api${pathRemaining}`;
+        }
+        else if (req.path.startsWith("/api/vault")) {
+            pathRemaining = req.path.replace("/api/vault", "");
+            targetUrl = `https://imageprompt-v1-dev.web.app/api${pathRemaining}`;
         }
         else {
             res.status(404).json({ error: "Unknown proxy target" });
@@ -64,7 +83,7 @@ exports.apiProxy = (0, https_1.onRequest)({ cors: true }, async (req, res) => {
         }
         logger.info("Forwarding to:", targetUrl);
         // Prepare fetch options
-        const fetchOptions = Object.assign({ method: req.method, headers: Object.assign({ "Content-Type": "application/json" }, (req.headers.authorization ? { "Authorization": req.headers.authorization } : {})) }, (req.method !== "GET" && req.method !== "HEAD" ? { body: JSON.stringify(req.body) } : {}));
+        const fetchOptions = Object.assign({ method: req.method, headers: Object.assign(Object.assign({ "Content-Type": "application/json" }, (req.headers.authorization ? { "Authorization": req.headers.authorization } : {})), (req.headers['x-api-key'] ? { "X-API-Key": req.headers['x-api-key'] } : {})) }, (req.method !== "GET" && req.method !== "HEAD" ? { body: JSON.stringify(req.body) } : {}));
         const response = await fetch(targetUrl, fetchOptions);
         // Handle response
         if (!response.ok) {

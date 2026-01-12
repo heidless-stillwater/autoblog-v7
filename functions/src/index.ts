@@ -32,6 +32,12 @@ export const apiProxy = onRequest({ cors: true }, async (req, res) => {
         } else if (req.path.startsWith("/api/brave")) {
             pathRemaining = req.path.replace("/api/brave", "");
             targetUrl = `https://api.search.brave.com${pathRemaining}`;
+        } else if (req.path.startsWith("/api/vault-local")) {
+            pathRemaining = req.path.replace("/api/vault-local", "");
+            targetUrl = `http://localhost:3000/api${pathRemaining}`;
+        } else if (req.path.startsWith("/api/vault")) {
+            pathRemaining = req.path.replace("/api/vault", "");
+            targetUrl = `https://imageprompt-v1-dev.web.app/api${pathRemaining}`;
         } else {
             res.status(404).json({ error: "Unknown proxy target" });
             return;
@@ -45,9 +51,11 @@ export const apiProxy = onRequest({ cors: true }, async (req, res) => {
             headers: {
                 "Content-Type": "application/json",
                 // Forward Authorization header if present
-                ...(req.headers.authorization ? { "Authorization": req.headers.authorization } : {})
+                ...(req.headers.authorization ? { "Authorization": req.headers.authorization } : {}),
+                // Forward PromptVault API Key if present
+                ...(req.headers['x-api-key'] ? { "X-API-Key": req.headers['x-api-key'] as string } : {})
             },
-            // Forward body for POST/PUT
+            // Forward body for POST/PUT/PATCH
             ...(req.method !== "GET" && req.method !== "HEAD" ? { body: JSON.stringify(req.body) } : {})
         };
 

@@ -30,13 +30,18 @@ class PromptVaultService {
         const apiKey = settings.promptVaultApiKey || import.meta.env.VITE_PROMPTVAULT_API_KEY;
         let baseUrl = settings.promptVaultBaseUrl || import.meta.env.VITE_PROMPTVAULT_BASE_URL;
 
-        // Auto-use proxy for known URLs in dev to avoid CORS
-        if (import.meta.env.DEV) {
-            if (baseUrl === 'https://imageprompt-v1-dev.web.app/api') {
-                baseUrl = '/api/vault';
-            } else if (baseUrl === 'http://localhost:3000/api') {
-                baseUrl = '/api/vault-local';
-            }
+        // Auto-use proxy for known URLs to avoid CORS
+        const vaultDevRegex = /https?:\/\/imageprompt-v1-dev\.web\.app\/api\/?/;
+        const vaultLocalRegex = /https?:\/\/localhost:3000\/api\/?/;
+
+        console.log('[PromptVault] Base URL before proxy:', baseUrl);
+
+        if (vaultDevRegex.test(baseUrl)) {
+            baseUrl = '/api/vault';
+            console.log('[PromptVault] Using Production Proxy:', baseUrl);
+        } else if (vaultLocalRegex.test(baseUrl)) {
+            baseUrl = '/api/vault-local';
+            console.log('[PromptVault] Using Local Proxy:', baseUrl);
         }
 
         const url = `${baseUrl}${endpoint}`;

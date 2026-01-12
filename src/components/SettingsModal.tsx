@@ -343,6 +343,12 @@ const SettingsModal = () => {
                     </section>
                 </div>
 
+                {/* Build Information */}
+                <div className="mt-6 pt-4 border-t border-slate-800/50 text-[10px] text-slate-600 flex justify-between items-center italic">
+                    <span>Build: 2026.01.12.1145</span>
+                    <span>CORS Proxy: Active (Robust Matching)</span>
+                </div>
+
                 <div className="mt-10 flex justify-end">
                     <button
                         onClick={handleSave}
