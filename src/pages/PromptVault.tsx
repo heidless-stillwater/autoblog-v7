@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { promptVaultService } from '../services/promptVault';
 import type { PromptVaultVersion, PromptVaultSet } from '../services/promptVault';
 import { useAuth } from '../contexts/AuthContext';
@@ -57,6 +57,16 @@ const PromptVault: React.FC = () => {
         s?.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
         s?.description?.toLowerCase()?.includes(searchQuery.toLowerCase())
     );
+
+    const versionToSetMap = useMemo(() => {
+        const map = new Map<string, PromptVaultSet>();
+        (promptSets || []).forEach(set => {
+            (set.versions || []).forEach(version => {
+                map.set(version.id, set);
+            });
+        });
+        return map;
+    }, [promptSets]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-700">
@@ -159,9 +169,14 @@ const PromptVault: React.FC = () => {
                                 </div>
                             </div>
                             <div className="p-4 space-y-3">
-                                <p className="text-sm text-slate-300 line-clamp-3 font-medium">
-                                    {v?.promptText || `Iteration #${v?.versionNumber || v?.id?.substring(0, 4)}`}
-                                </p>
+                                <div className="space-y-1">
+                                    <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider truncate">
+                                        {versionToSetMap.get(v.id)?.title || versionToSetMap.get(v.id)?.name || 'Unknown Set'}
+                                    </h4>
+                                    <p className="text-sm text-slate-300 line-clamp-3 font-medium">
+                                        {v?.promptText || `Iteration #${v?.versionNumber || v?.id?.substring(0, 4)}`}
+                                    </p>
+                                </div>
                                 <div className="flex items-center justify-between pt-2 border-t border-slate-700/50">
                                     <span className="text-xs text-slate-500">
                                         {new Date(v.createdAt).toLocaleDateString()}
