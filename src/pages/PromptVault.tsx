@@ -17,7 +17,10 @@ import {
     CheckCircle,
     AlertTriangle,
     RefreshCw,
-    SkipForward
+    SkipForward,
+    SortAsc,
+    SortDesc,
+    Filter
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../store';
@@ -35,6 +38,11 @@ const PromptVault: React.FC = () => {
     const [selectedSet, setSelectedSet] = useState<PromptVaultSet | null>(null);
     const [selectedVersionIds, setSelectedVersionIds] = useState<Set<string>>(new Set());
     const [copyingIds, setCopyingIds] = useState<Set<string>>(new Set());
+
+    // Sort & Filter State
+    const [sortBy, setSortBy] = useState<'date' | 'title' | 'set'>('date');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    const [filterSetId, setFilterSetId] = useState<string>('all');
 
     // Conflict Resolution State
     const [conflictQueue, setConflictQueue] = useState<{ version: PromptVaultVersion, existingMediaId: string }[]>([]);
@@ -102,10 +110,6 @@ const PromptVault: React.FC = () => {
         setPermissionGranted(true);
     };
 
-    const filteredVersions = (versions || []).filter(v =>
-        v?.promptText?.toLowerCase()?.includes(searchQuery.toLowerCase())
-    );
-
     const filteredSets = (promptSets || []).filter(s =>
         s?.name?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
         s?.title?.toLowerCase()?.includes(searchQuery.toLowerCase()) ||
@@ -121,6 +125,44 @@ const PromptVault: React.FC = () => {
         });
         return map;
     }, [promptSets]);
+
+    const processedVersions = useMemo(() => {
+        let result = (versions || []).filter(v =>
+            v?.promptText?.toLowerCase()?.includes(searchQuery.toLowerCase())
+        );
+
+        // Filter by Set
+        if (filterSetId !== 'all') {
+            result = result.filter(v => versionToSetMap.get(v.id)?.id === filterSetId);
+        }
+
+        // Sort
+        result.sort((a, b) => {
+            let valA: string | number = '';
+            let valB: string | number = '';
+
+            switch (sortBy) {
+                case 'date':
+                    valA = new Date(a.createdAt).getTime();
+                    valB = new Date(b.createdAt).getTime();
+                    break;
+                case 'title':
+                    valA = (versionToSetMap.get(a.id)?.title || '').toLowerCase();
+                    valB = (versionToSetMap.get(b.id)?.title || '').toLowerCase();
+                    break;
+                case 'set':
+                    valA = (versionToSetMap.get(a.id)?.name || '').toLowerCase();
+                    valB = (versionToSetMap.get(b.id)?.name || '').toLowerCase();
+                    break;
+            }
+
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        return result;
+    }, [versions, searchQuery, filterSetId, sortBy, sortDirection, versionToSetMap]);
 
     const handleToggleSelectOriginal = (id: string) => {
         setSelectedVersionIds(prev => {
@@ -320,6 +362,52 @@ const PromptVault: React.FC = () => {
                 </div>
             </div>
 
+            {/* Sort & Filter Controls (Iterations Only) */}
+            {activeTab === 'iterations' && (
+                <div className="flex items-center justify-end gap-2 mb-4 px-1">
+                    <div className="relative">
+                        <select
+                            value={filterSetId}
+                            onChange={(e) => setFilterSetId(e.target.value)}
+                            className="appearance-none bg-slate-800 border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-white focus:outline-none focus:border-indigo-500 text-xs max-w-[150px]"
+                        >
+                            <option value="all">All Collections</option>
+                            {promptSets.map(set => (
+                                <option key={set.id} value={set.id}>
+                                    {set.title || set.name}
+                                </option>
+                            ))}
+                        </select>
+                        <Filter size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative">
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="appearance-none bg-slate-800 border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-white focus:outline-none focus:border-indigo-500 text-xs"
+                        >
+                            <option value="date">Date</option>
+                            <option value="title">Title</option>
+                            <option value="set">Collection</option>
+                        </select>
+                        {sortDirection === 'asc' ? (
+                            <SortAsc size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        ) : (
+                            <SortDesc size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-indigo-500 transition-colors"
+                        title={sortDirection === 'asc' ? "Switch to Descending" : "Switch to Ascending"}
+                    >
+                        {sortDirection === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                    </button>
+                </div>
+            )}
+
             {/* Tabs */}
             <div className="flex border-b border-slate-800">
                 <button
@@ -354,7 +442,7 @@ const PromptVault: React.FC = () => {
             {/* Content Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeTab === 'iterations' ? (
-                    filteredVersions.map((v) => (
+                    processedVersions.map((v) => (
                         <div
                             key={v.id}
                             onClick={() => handleToggleSelectOriginal(v.id)}
@@ -475,7 +563,7 @@ const PromptVault: React.FC = () => {
                     })
                 )}
 
-                {!loading && (activeTab === 'iterations' ? filteredVersions : filteredSets).length === 0 && (
+                {!loading && (activeTab === 'iterations' ? processedVersions : filteredSets).length === 0 && (
                     <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-500 space-y-4">
                         <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center">
                             <Layers size={40} className="text-slate-600" />
