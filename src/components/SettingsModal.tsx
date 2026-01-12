@@ -178,7 +178,7 @@ const SettingsModal = () => {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-1">API Permissions</label>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">PromptVault API Permissions</label>
                                 <select
                                     value={localSettings.promptVaultPermissionMode || 'always_ask'}
                                     onChange={(e) => setLocalSettings({ ...localSettings, promptVaultPermissionMode: e.target.value as any })}
